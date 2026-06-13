@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mochi — 住在桌面角落的情绪陪伴水母</title>
+<meta name="description" content="一只住在桌面角落的 AI 情绪陪伴水母。随时倾诉，自动生成情绪日记，陪伴但从不分析你。">
+<style>
+:root {
+  --lav: #f0eef8;
+  --lav2: #e8e4f4;
+  --p1: #5050a0;
+  --p2: #7878c8;
+  --ink: #22223a;
+  --ink2: #56567a;
+  --ink3: #9898b8;
+  --white: #ffffff;
+  --card: rgba(255,255,255,0.92);
+  --radius: 20px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background: var(--lav);
+  color: var(--ink);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* NAV */
+nav {
+  position: fixed; top:0; left:0; right:0; z-index:200;
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 0 48px; height:60px;
+  background: rgba(240,238,248,0.85);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(180,170,230,0.18);
+}
+.nav-logo { display:flex; align-items:center; gap:9px; font-weight:700; font-size:15px; color:var(--ink); text-decoration:none; }
+.nav-logo img { width:28px; height:28px; border-radius:50%; }
+.nav-dl {
+  background: linear-gradient(135deg,var(--p1),var(--p2));
+  color:#fff; border:none; border-radius:18px;
+  padding:7px 18px; font-size:13px; font-weight:600;
+  cursor:pointer; text-decoration:none;
+  transition: opacity .18s, transform .15s;
+}
+.nav-dl:hover { opacity:.88; transform:translateY(-1px); }
+
+/* HERO */
+.hero {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 64px;
+  padding: 100px 80px 60px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.hero-text { }
+.hero-eyebrow {
+  display:inline-flex; align-items:center; gap:8px;
+  background: rgba(90,80,180,.1); border:1px solid rgba(90,80,180,.2);
+  border-radius:20px; padding:5px 14px;
+  font-size:12px; font-weight:600; color:var(--p1);
+  letter-spacing:.5px; margin-bottom:28px;
+}
+.hero-text h1 {
+  font-size: clamp(30px,4vw,52px);
+  font-weight:800; line-height:1.18;
+  margin-bottom:20px; color:var(--ink);
+  letter-spacing:-.5px;
+}
+.hero-text h1 em { font-style:normal; color:var(--p1); }
+.hero-text p {
+  font-size:16px; color:var(--ink2);
+  max-width:380px; margin-bottom:36px; line-height:1.75;
+}
+.hero-btns { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.btn-primary {
+  background: linear-gradient(135deg,var(--p1),var(--p2));
+  color:#fff; border:none; border-radius:22px;
+  padding:12px 26px; font-size:14px; font-weight:600;
+  cursor:pointer; text-decoration:none;
+  box-shadow:0 6px 20px rgba(80,70,160,.26);
+  transition:transform .15s, box-shadow .15s;
+}
+.btn-primary:hover { transform:translateY(-2px); box-shadow:0 10px 28px rgba(80,70,160,.34); }
+.btn-ghost {
+  background:rgba(255,255,255,.7); color:var(--p1);
+  border:1.5px solid rgba(100,90,200,.25);
+  border-radius:22px; padding:12px 22px;
+  font-size:14px; font-weight:500;
+  cursor:pointer; text-decoration:none;
+  backdrop-filter:blur(8px);
+  transition:background .15s;
+}
+.btn-ghost:hover { background:rgba(255,255,255,.95); }
+.hero-hint { font-size:12px; color:var(--ink3); }
+
+/* MOCHI PANEL MOCK */
+.hero-panel {
+  position: relative;
+  display:flex; justify-content:center;
+}
+.mock-desktop {
+  position:relative;
+  width:320px;
+}
+.mock-jelly {
+  position:absolute;
+  right:-28px; bottom: calc(100% - 36px);
+  width:96px; height:96px;
+  animation: jellyFloat 4s ease-in-out infinite;
+  z-index:10;
+}
+.mock-jelly img {
+  width:100%; height:100%; object-fit:contain;
+  filter: drop-shadow(0 8px 24px rgba(80,70,180,.28));
+}
+@keyframes jellyFloat {
+  0%,100% { transform:translateY(0) rotate(-2deg); }
+  50% { transform:translateY(-12px) rotate(2deg); }
+}
+
+.mock-panel {
+  width:100%;
+  background:var(--card);
+  border:1px solid rgba(180,170,240,.35);
+  border-radius:28px;
+  box-shadow:0 24px 72px rgba(60,50,140,.16), 0 4px 16px rgba(60,50,140,.08);
+  overflow:hidden;
+}
+/* panel top bar */
+.mock-topbar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 18px 10px;
+  border-bottom:1px solid rgba(180,170,240,.18);
+}
+.mock-topbar-left { font-size:11px; color:var(--ink3); }
+.mock-topbar-tabs {
+  display:flex; gap:4px;
+}
+.mock-tab {
+  padding:4px 12px; border-radius:12px;
+  font-size:11px; font-weight:500; color:var(--ink3);
+  cursor:pointer;
+}
+.mock-tab.active {
+  background:linear-gradient(135deg,var(--p1),var(--p2));
+  color:#fff;
+}
+/* chat area */
+.mock-chat {
+  padding:16px 14px;
+  height:280px; overflow:hidden;
+  display:flex; flex-direction:column; gap:12px;
+  position:relative;
+}
+.bubble {
+  display:flex; gap:8px; align-items:flex-end;
+  animation: bubbleIn .4s ease both;
+}
+.bubble.mochi { flex-direction:row; }
+.bubble.user { flex-direction:row-reverse; }
+@keyframes bubbleIn {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.bubble-avatar {
+  width:24px; height:24px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(135deg,#a0b8f0,#8080d8);
+}
+.bubble-text {
+  max-width:200px; padding:9px 13px;
+  border-radius:16px; font-size:12.5px; line-height:1.6; color:var(--ink);
+}
+.bubble.mochi .bubble-text {
+  background:#f4f2fc;
+  border-radius:4px 16px 16px 16px;
+}
+.bubble.user .bubble-text {
+  background:linear-gradient(135deg,var(--p1),var(--p2));
+  color:#fff;
+  border-radius:16px 4px 16px 16px;
+}
+/* typing indicator */
+.typing { display:flex; gap:4px; align-items:center; padding:10px 13px; background:#f4f2fc; border-radius:4px 16px 16px 16px; }
+.typing span {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--p2); opacity:.5;
+  animation:typingDot 1.2s ease-in-out infinite;
+}
+.typing span:nth-child(2) { animation-delay:.2s; }
+.typing span:nth-child(3) { animation-delay:.4s; }
+@keyframes typingDot { 0%,80%,100%{transform:scale(1);opacity:.4} 40%{transform:scale(1.3);opacity:1} }
+
+/* emotion card in chat */
+.emo-card {
+  background:linear-gradient(135deg,#f0edf8,#e8e4f4);
+  border:1px solid rgba(160,140,220,.25);
+  border-radius:16px; padding:12px 14px;
+  font-size:11.5px; color:var(--ink2);
+  margin-top:4px;
+  animation: bubbleIn .5s ease both;
+  animation-delay:.8s; opacity:0;
+  animation-fill-mode:both;
+}
+.emo-card-head { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+.emo-dot { width:8px; height:8px; border-radius:50%; background:#2a9868; }
+.emo-card-head span { font-size:11px; font-weight:600; color:var(--p1); }
+.emo-card p { line-height:1.65; color:var(--ink2); }
+
+/* chat input bar */
+.mock-input {
+  display:flex; align-items:center; gap:8px;
+  margin:0 14px 14px;
+  background:#f4f2fc;
+  border-radius:16px; padding:9px 12px;
+  border:1px solid rgba(160,150,220,.2);
+}
+.mock-input-text { flex:1; font-size:12px; color:var(--ink3); }
+.mock-send {
+  width:28px; height:28px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(135deg,var(--p1),var(--p2));
+  display:flex; align-items:center; justify-content:center;
+}
+.mock-send svg { width:12px; height:12px; fill:none; stroke:#fff; stroke-width:2; }
+
+/* DEMO SECTION */
+.demo-section {
+  padding:80px 24px;
+  max-width:1080px; margin:0 auto;
+}
+.demo-section h2 {
+  font-size:clamp(22px,3.5vw,36px);
+  font-weight:800; text-align:center;
+  margin-bottom:8px; letter-spacing:-.3px;
+}
+.demo-section > p {
+  text-align:center; color:var(--ink2); font-size:15px; margin-bottom:40px;
+}
+.demo-tabs {
+  display:flex; gap:8px; justify-content:center; margin-bottom:32px;
+}
+.demo-tab {
+  padding:8px 20px; border-radius:20px;
+  font-size:13px; font-weight:500; color:var(--ink2);
+  background:rgba(255,255,255,.6);
+  border:1.5px solid rgba(160,150,220,.2);
+  cursor:pointer; text-decoration:none;
+  transition:all .2s;
+}
+.demo-tab:hover { color:var(--p1); background:rgba(255,255,255,.9); }
+.demo-tab.active {
+  background:linear-gradient(135deg,var(--p1),var(--p2));
+  color:#fff; border-color:transparent;
+  box-shadow:0 4px 16px rgba(80,70,180,.22);
+}
+.demo-pane { display:flex; gap:32px; align-items:flex-start; flex-wrap:wrap; margin-bottom:64px; }
+.demo-pane:last-child { margin-bottom:0; }
+
+/* demo: chat */
+.demo-chat-mock {
+  flex:1; min-width:280px; max-width:360px;
+  background:var(--card);
+  border:1px solid rgba(180,170,240,.3);
+  border-radius:24px;
+  box-shadow:0 12px 40px rgba(60,50,140,.1);
+  overflow:hidden;
+}
+.demo-chat-mock .mock-topbar { }
+.demo-chat-body { padding:16px 14px; display:flex; flex-direction:column; gap:10px; min-height:320px; }
+.demo-desc {
+  flex:1; min-width:260px;
+  display:flex; flex-direction:column; justify-content:center; gap:20px;
+}
+.demo-desc h3 { font-size:22px; font-weight:700; line-height:1.3; }
+.demo-desc p { font-size:14px; color:var(--ink2); line-height:1.75; }
+.demo-pills { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+.pill {
+  display:inline-flex; align-items:center; gap:6px;
+  background:rgba(255,255,255,.8); border:1px solid rgba(160,150,220,.25);
+  border-radius:20px; padding:5px 13px;
+  font-size:12px; color:var(--ink2);
+}
+.pill-dot { width:7px; height:7px; border-radius:50%; }
+
+/* diary card */
+.diary-card-mock {
+  flex:1; min-width:280px; max-width:360px;
+  background:var(--card);
+  border:1px solid rgba(180,170,240,.3);
+  border-radius:24px;
+  box-shadow:0 12px 40px rgba(60,50,140,.1);
+  overflow:hidden;
+  padding:24px 22px;
+}
+.diary-date { font-size:11px; color:var(--ink3); margin-bottom:6px; }
+.diary-emo-row { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+.diary-emo-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  background:rgba(42,152,104,.12); border-radius:10px;
+  padding:4px 10px; font-size:12px; font-weight:600; color:#2a9868;
+}
+.diary-body { font-size:13px; color:var(--ink2); line-height:1.8; }
+.diary-quote {
+  margin-top:14px; padding:10px 14px;
+  background:#f4f2fc; border-left:3px solid var(--p2);
+  border-radius:0 10px 10px 0;
+  font-size:12px; color:var(--ink2); font-style:italic;
+}
+
+/* trend chart */
+.trend-mock {
+  flex:1; min-width:280px; max-width:400px;
+  background:var(--card);
+  border:1px solid rgba(180,170,240,.3);
+  border-radius:24px;
+  box-shadow:0 12px 40px rgba(60,50,140,.1);
+  overflow:hidden;
+  padding:20px 20px 16px;
+}
+.trend-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.trend-title { font-size:13px; font-weight:600; color:var(--ink); }
+.trend-period { font-size:11px; color:var(--ink3); }
+.trend-svg { width:100%; }
+.trend-legend { display:flex; gap:16px; margin-top:12px; flex-wrap:wrap; }
+.legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--ink2); }
+.legend-dot { width:8px; height:8px; border-radius:50%; }
+
+/* PRIVACY STRIP */
+.privacy-strip {
+  background:rgba(255,255,255,.5);
+  border-top:1px solid rgba(180,170,240,.2);
+  border-bottom:1px solid rgba(180,170,240,.2);
+  padding:40px 24px;
+}
+.privacy-inner {
+  max-width:800px; margin:0 auto;
+  display:grid; grid-template-columns:repeat(4,1fr);
+  gap:28px;
+}
+.privacy-item { display:flex; gap:12px; align-items:flex-start; }
+.privacy-icon { width:20px; height:20px; flex-shrink:0; margin-top:2px; }
+.privacy-item h4 { font-size:13px; font-weight:600; margin-bottom:3px; }
+.privacy-item p { font-size:12px; color:var(--ink2); line-height:1.6; }
+
+/* DOWNLOAD */
+.download-wrap {
+  padding:80px 24px;
+  text-align:center;
+}
+.download-wrap h2 { font-size:clamp(24px,4vw,40px); font-weight:800; margin-bottom:10px; letter-spacing:-.3px; }
+.download-wrap > p { color:var(--ink2); font-size:15px; margin-bottom:36px; }
+.dl-cards { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+.dl-card {
+  background:var(--card);
+  border:1.5px solid rgba(120,100,200,.2);
+  border-radius:18px; padding:20px 28px;
+  text-align:left; cursor:pointer; text-decoration:none;
+  transition:transform .15s, box-shadow .15s;
+  box-shadow:0 4px 16px rgba(80,70,160,.07);
+  min-width:200px;
+}
+.dl-card:hover { transform:translateY(-3px); box-shadow:0 10px 28px rgba(80,70,160,.15); }
+.dl-chip { font-size:10px; font-weight:700; letter-spacing:1.5px; color:var(--p1); margin-bottom:6px; }
+.dl-title { font-size:15px; font-weight:700; color:var(--ink); margin-bottom:3px; }
+.dl-sub { font-size:12px; color:var(--ink3); }
+.dl-note { font-size:12px; color:var(--ink3); margin-top:18px; line-height:1.8; }
+
+/* FOOTER */
+footer {
+  text-align:center; padding:32px 24px;
+  font-size:12px; color:var(--ink3);
+  border-top:1px solid rgba(180,170,240,.2);
+}
+footer a { color:var(--p2); text-decoration:none; }
+footer a:hover { text-decoration:underline; }
+
+/* ANIMATION DELAYS for hero chat */
+.b1 { animation-delay: .1s; }
+.b2 { animation-delay: .6s; }
+.b3 { animation-delay: 1.2s; }
+.b4 { animation-delay: 2.0s; }
+.b5 { animation-delay: 2.8s; }
+
+/* all bubbles hidden initially via animation */
+.bubble { opacity:0; animation-fill-mode:both; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="#">
+    <img src="../../assets/mochi_avatar.webp" alt="Mochi">
+    Mochi
+  </a>
+  <a class="nav-dl" href="#download">免费下载</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-text">
+    <div class="hero-eyebrow">macOS 桌面 · 免费开源</div>
+    <h1>住在角落，<br><em>陪你说话</em>，<br>从不分析你</h1>
+    <p>随时倾诉，Mochi 就在屏幕边上。每天自动整理情绪，记得你说过的一切，但永远不会评判。</p>
+    <div class="hero-btns">
+      <a class="btn-primary" href="#download">下载 Mochi（免费）</a>
+      <a class="btn-ghost" href="#demo">看看怎么用</a>
+    </div>
+    <p class="hero-hint">macOS 12+ · 需要自己的 API Key</p>
+  </div>
+
+  <div class="hero-panel">
+    <div class="mock-desktop">
+      <div class="mock-jelly"><img src="../../assets/mochi_calm.png" alt="Mochi"></div>
+      <div class="mock-panel">
+        <div class="mock-topbar">
+          <span class="mock-topbar-left">6月13日 · 今天</span>
+          <div class="mock-topbar-tabs">
+            <div class="mock-tab active">聊天</div>
+            <div class="mock-tab">日记</div>
+          </div>
+        </div>
+        <div class="mock-chat">
+          <div class="bubble mochi b1">
+            <div class="bubble-avatar"></div>
+            <div class="bubble-text">今天感觉怎么样？</div>
+          </div>
+          <div class="bubble user b2">
+            <div class="bubble-text">有点累，开了好几个小时会</div>
+          </div>
+          <div class="bubble mochi b3">
+            <div class="bubble-avatar"></div>
+            <div class="bubble-text">嗯……开了好久的会，累是应该的。</div>
+          </div>
+          <div class="bubble user b4">
+            <div class="bubble-text">但其实有个事还挺开心的</div>
+          </div>
+          <div class="bubble mochi b5">
+            <div class="bubble-avatar"></div>
+            <div class="bubble-text">说说看？</div>
+          </div>
+        </div>
+        <div class="mock-input">
+          <span class="mock-input-text">说说今天……</span>
+          <div class="mock-send">
+            <svg viewBox="0 0 16 16"><line x1="2" y1="14" x2="14" y2="2"/><polyline points="6,2 14,2 14,10"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DEMO SECTION -->
+<div class="demo-section" id="demo">
+  <h2>不只是聊聊天</h2>
+  <p>每次对话都在积累，帮你看见情绪的样子。</p>
+
+  <div class="demo-tabs">
+    <a class="demo-tab active" href="#demo-chat">随时倾诉</a>
+    <a class="demo-tab" href="#demo-diary">情绪日卡</a>
+    <a class="demo-tab" href="#demo-trend">情绪走势</a>
+  </div>
+
+  <!-- CHAT DEMO -->
+  <div class="demo-pane active" id="demo-chat">
+    <div class="demo-chat-mock">
+      <div class="mock-topbar">
+        <span class="mock-topbar-left">今天</span>
+      </div>
+      <div class="demo-chat-body">
+        <div class="bubble mochi" style="opacity:1;animation:none">
+          <div class="bubble-avatar"></div>
+          <div class="bubble-text">最近睡得怎么样？</div>
+        </div>
+        <div class="bubble user" style="opacity:1;animation:none">
+          <div class="bubble-text">不太好，脑子一直转</div>
+        </div>
+        <div class="bubble mochi" style="opacity:1;animation:none">
+          <div class="bubble-avatar"></div>
+          <div class="bubble-text">转什么呢？</div>
+        </div>
+        <div class="bubble user" style="opacity:1;animation:none">
+          <div class="bubble-text">就是很多没做完的事情，关不掉</div>
+        </div>
+        <div class="bubble mochi" style="opacity:1;animation:none">
+          <div class="bubble-avatar"></div>
+          <div class="bubble-text">上次你说项目压力大，是那些事吗？</div>
+        </div>
+        <div class="bubble user" style="opacity:1;animation:none">
+          <div class="bubble-text">对，还记得呢</div>
+        </div>
+        <div class="bubble mochi" style="opacity:1;animation:none">
+          <div class="bubble-avatar"></div>
+          <div class="bubble-text">一直都记得。</div>
+        </div>
+      </div>
+    </div>
+    <div class="demo-desc">
+      <h3>想说什么<br>就说什么</h3>
+      <p>Mochi 不评判、不给建议、不追问。只是在，只是听，偶尔轻轻回应。</p>
+      <div class="demo-pills">
+        <div class="pill"><div class="pill-dot" style="background:#2a9868"></div>共情，不建议</div>
+        <div class="pill"><div class="pill-dot" style="background:#7878c8"></div>记得你的故事</div>
+        <div class="pill"><div class="pill-dot" style="background:#c08808"></div>不追问，不催</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIARY DEMO -->
+  <div class="demo-pane" id="demo-diary">
+    <div class="diary-card-mock">
+      <div class="diary-date">2026年6月12日 · 周四</div>
+      <div class="diary-emo-row">
+        <div class="diary-emo-badge">
+          <div class="pill-dot" style="background:#2a9868;width:8px;height:8px;border-radius:50%"></div>
+          平静
+        </div>
+        <span style="font-size:11px;color:var(--ink3)">聊了 3 次 · 共 12 条</span>
+      </div>
+      <div class="diary-body">
+        今天的节奏慢下来了一点。早上说到睡眠不好，关不掉脑子里的事。下午提到项目截止日，但语气比上周轻了。
+        <br><br>
+        傍晚说想出去走走，最后好像真的走了。
+      </div>
+      <div class="diary-quote">「还记得呢。」—— Mochi 的回应让你停顿了一下。</div>
+    </div>
+    <div class="demo-desc">
+      <h3>每天一张<br>情绪日卡</h3>
+      <p>点 ✦ 按钮，Mochi 把今天说的话整理成一张日卡——还原细节，不下结论，不替你解读。</p>
+      <div class="demo-pills">
+        <div class="pill">✦ 一键生成</div>
+        <div class="pill">周 / 月叙事</div>
+        <div class="pill">日历回顾</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TREND DEMO -->
+  <div class="demo-pane" id="demo-trend">
+    <div class="trend-mock">
+      <div class="trend-head">
+        <span class="trend-title">情绪走势 · 六月</span>
+        <span class="trend-period">本月</span>
+      </div>
+      <svg class="trend-svg" viewBox="0 0 340 140" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#7878c8" stop-opacity=".18"/>
+            <stop offset="100%" stop-color="#7878c8" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <!-- grid lines -->
+        <line x1="0" y1="28" x2="340" y2="28" stroke="#e0daf0" stroke-width=".8"/>
+        <line x1="0" y1="70" x2="340" y2="70" stroke="#e0daf0" stroke-width=".8"/>
+        <line x1="0" y1="112" x2="340" y2="112" stroke="#e0daf0" stroke-width=".8"/>
+        <!-- labels -->
+        <text x="0" y="25" font-size="9" fill="#b0a8d8">开心</text>
+        <text x="0" y="67" font-size="9" fill="#b0a8d8">平静</text>
+        <text x="0" y="109" font-size="9" fill="#b0a8d8">低落</text>
+        <!-- area fill -->
+        <path d="M28,90 C48,85 60,50 80,45 C100,40 115,65 135,60 C155,55 165,30 185,28 C205,26 220,55 240,60 C260,65 275,42 295,38 C310,35 320,50 330,55 L330,140 L28,140 Z"
+              fill="url(#trendGrad)"/>
+        <!-- line -->
+        <path d="M28,90 C48,85 60,50 80,45 C100,40 115,65 135,60 C155,55 165,30 185,28 C205,26 220,55 240,60 C260,65 275,42 295,38 C310,35 320,50 330,55"
+              fill="none" stroke="#7878c8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- dots -->
+        <circle cx="80" cy="45" r="4" fill="#2a9868"/>
+        <circle cx="185" cy="28" r="5" fill="#c08808" stroke="#fff" stroke-width="1.5"/>
+        <circle cx="295" cy="38" r="4" fill="#2a9868"/>
+        <!-- date labels -->
+        <text x="25" y="130" font-size="9" fill="#b0a8d8" text-anchor="middle">1</text>
+        <text x="80" y="130" font-size="9" fill="#b0a8d8" text-anchor="middle">5</text>
+        <text x="135" y="130" font-size="9" fill="#b0a8d8" text-anchor="middle">8</text>
+        <text x="185" y="130" font-size="9" fill="#b0a8d8" text-anchor="middle">11</text>
+        <text x="240" y="130" font-size="9" fill="#b0a8d8" text-anchor="middle">14</text>
+        <text x="295" y="130" font-size="9" fill="#b0a8d8" text-anchor="middle">17</text>
+        <text x="330" y="130" font-size="9" fill="#b0a8d8" text-anchor="middle">19</text>
+        <!-- tooltip card -->
+        <rect x="130" y="2" width="116" height="38" rx="8" fill="white" stroke="#e0daf0" stroke-width="1" filter="url(#shadow)"/>
+        <defs><filter id="shadow"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#c0b8e8" flood-opacity=".18"/></filter></defs>
+        <circle cx="143" cy="13" r="4" fill="#c08808"/>
+        <text x="152" y="17" font-size="9.5" fill="#22223a" font-weight="700">6月11日 · 开心</text>
+        <text x="143" y="31" font-size="8.5" fill="#9898b8">「终于把那件事做完了」</text>
+      </svg>
+      <div class="trend-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#2a9868"></div>平静</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#c08808"></div>开心</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#c83050"></div>焦虑</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#5858b8"></div>低落</div>
+      </div>
+    </div>
+    <div class="demo-desc">
+      <h3>看见情绪<br>的样子</h3>
+      <p>日历视图和走势折线，回看每一天。不打分，不评级，只是让你看见。</p>
+      <div class="demo-pills">
+        <div class="pill">日历模式</div>
+        <div class="pill">折线走势</div>
+        <div class="pill">月度叙事</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PRIVACY STRIP -->
+<div class="privacy-strip">
+  <div class="privacy-inner">
+    <div class="privacy-item">
+      <svg class="privacy-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="9" width="14" height="10" rx="2.5" stroke="#7878c8" stroke-width="1.5"/><path d="M7 9V6a3 3 0 016 0v3" stroke="#7878c8" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="14" r="1.5" fill="#7878c8"/></svg>
+      <div>
+        <h4>API Key 自管理</h4>
+        <p>用你自己的 Key 调用 AI，费用记在你的账户，我们看不到。</p>
+      </div>
+    </div>
+    <div class="privacy-item">
+      <svg class="privacy-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2L3 5v5c0 4.418 3.134 8.192 7 9 3.866-.808 7-4.582 7-9V5l-7-3z" stroke="#7878c8" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      <div>
+        <h4>数据严格隔离</h4>
+        <p>匿名账号自动创建，RLS 保护，任何人都无法读取你的数据。</p>
+      </div>
+    </div>
+    <div class="privacy-item">
+      <svg class="privacy-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="7.5" stroke="#7878c8" stroke-width="1.5"/><path d="M10 6v4.5l3 1.5" stroke="#7878c8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="3" y1="3" x2="17" y2="17" stroke="#7878c8" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div>
+        <h4>无追踪，无广告</h4>
+        <p>不收集行为数据，不接入广告 SDK。</p>
+      </div>
+    </div>
+    <div class="privacy-item">
+      <svg class="privacy-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 4l4 4-4 4" stroke="#7878c8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="10" y1="12" x2="16" y2="12" stroke="#7878c8" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div>
+        <h4>完全开源</h4>
+        <p>代码公开在 GitHub，你可以自己审查每一行。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DOWNLOAD -->
+<div class="download-wrap" id="download">
+  <h2>免费下载，永久使用</h2>
+  <p>只需要一个 AI 服务的 API Key，Mochi 本身完全免费。</p>
+  <div class="dl-cards">
+    <a class="dl-card" href="https://github.com/1ivy403/mochi/releases/latest/download/Mochi-0.1.0-arm64.dmg">
+      <div class="dl-chip">APPLE SILICON</div>
+      <div class="dl-title">下载 for M1/M2/M3/M4</div>
+      <div class="dl-sub">2020 年后的 Mac · ~99 MB</div>
+    </a>
+    <a class="dl-card" href="https://github.com/1ivy403/mochi/releases/latest/download/Mochi-0.1.0.dmg">
+      <div class="dl-chip">INTEL</div>
+      <div class="dl-title">下载 for Intel Mac</div>
+      <div class="dl-sub">2020 年前的 Mac · ~103 MB</div>
+    </a>
+  </div>
+  <p class="dl-note">
+    需要 macOS 12 Monterey 或更高版本<br>
+    首次打开提示「无法验证开发者」：右键 → 打开 → 仍然打开<br>
+    不确定芯片型号？左上角苹果 → 关于本机 → 芯片
+  </p>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <p>
+    <a href="https://github.com/1ivy403/mochi">GitHub 开源</a> ·
+    <a href="https://github.com/1ivy403/mochi/issues">反馈问题</a> ·
+    Mochi 情绪小兽 · 2026
+  </p>
+</footer>
+
+<script></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+name: Bug Report
+description: 发现了一个 bug
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: os
+    attributes:
+      label: macOS 版本
+      placeholder: "如：macOS 14.4 Sonoma"
+    validations:
+      required: true
+  - type: dropdown
+    id: arch
+    attributes:
+      label: 芯片
+      options:
+        - Apple Silicon（M 系列）
+        - Intel
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 JellyMate
+        2. 做了 xxx
+        3. 出现了 xxx
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true

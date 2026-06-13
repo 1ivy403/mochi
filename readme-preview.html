@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JellyMate README 预览</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --link: #58a6ff;
+      --accent: #7fd8e8;
+      --accent-dim: rgba(127, 216, 232, 0.12);
+      --code-bg: rgba(110, 118, 129, 0.15);
+      --table-stripe: rgba(110, 118, 129, 0.06);
+      --radius: 8px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .preview-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(22, 27, 34, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .preview-bar strong { color: var(--accent); }
+
+    .repo-header {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px 32px 0;
+    }
+    .repo-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 20px;
+      color: var(--link);
+      margin-bottom: 16px;
+    }
+    .repo-name svg { opacity: 0.7; }
+
+    .readme-wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 32px 80px;
+    }
+    .readme-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px 48px;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .readme-box { padding: 28px 20px; }
+      .repo-header, .readme-wrap { padding-left: 16px; padding-right: 16px; }
+    }
+
+    .markdown h1 {
+      font-size: 2em;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.3em;
+      margin-bottom: 16px;
+    }
+    .markdown h2 {
+      font-size: 1.5em;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.3em;
+      margin-top: 32px;
+      margin-bottom: 16px;
+    }
+    .markdown p { margin-bottom: 16px; }
+    .markdown strong { font-weight: 600; }
+    .markdown a { color: var(--link); text-decoration: none; }
+    .markdown a:hover { text-decoration: underline; }
+    .markdown hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 28px 0;
+    }
+
+    .hero-lead {
+      font-size: 1.15em;
+      margin-bottom: 20px;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--code-bg);
+      color: var(--text-muted);
+    }
+    .badge.blue { background: rgba(56, 139, 253, 0.15); color: #58a6ff; border-color: rgba(56,139,253,0.3); }
+
+    .cta-row {
+      text-align: center;
+      margin: 20px 0 28px;
+      font-size: 15px;
+    }
+    .cta-row a.primary { color: var(--accent); font-weight: 600; }
+    .cta-row .dot { color: var(--text-muted); margin: 0 6px; }
+
+    /* 演示区 — 核心 */
+    .demo-section {
+      margin: 8px 0 24px;
+    }
+    .demo-frame-wrap {
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #0a1228;
+      aspect-ratio: 16 / 10;
+      max-height: 520px;
+    }
+    .demo-frame-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+    .demo-caption {
+      text-align: center;
+      margin-top: 14px;
+      font-size: 15px;
+    }
+    .demo-caption a {
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .demo-caption a:hover { text-decoration: underline; }
+    .demo-hint {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .markdown blockquote {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-dim);
+      padding: 12px 16px;
+      margin: 24px 0;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      color: var(--text-muted);
+    }
+    .markdown blockquote strong { color: var(--text); }
+
+    .markdown table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    .markdown th, .markdown td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+    .markdown th {
+      background: var(--table-stripe);
+      font-weight: 600;
+    }
+
+    details {
+      margin: 16px 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    summary {
+      padding: 12px 16px;
+      cursor: pointer;
+      background: var(--table-stripe);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .details-body { padding: 16px; }
+    .details-body table { margin: 0; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.875em;
+      background: var(--code-bg);
+      padding: 0.2em 0.4em;
+      border-radius: 4px;
+    }
+    pre {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      overflow-x: auto;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+    pre code { background: none; padding: 0; }
+    .comment { color: #8b949e; }
+
+    .tree {
+      font-family: var(--mono);
+      font-size: 13px;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      line-height: 1.7;
+      color: var(--text-muted);
+    }
+
+    .markdown ul { padding-left: 24px; margin: 12px 0; }
+    .markdown li { margin-bottom: 6px; color: var(--text-muted); }
+    .markdown li strong { color: var(--text); }
+
+    .roadmap li {
+      list-style: none;
+      position: relative;
+      padding-left: 24px;
+      color: var(--text-muted);
+    }
+    .roadmap li::before {
+      content: "☐";
+      position: absolute;
+      left: 0;
+    }
+
+    .meta-line {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin: 8px 0;
+    }
+
+    .install-tip {
+      border-left: 4px solid var(--border);
+      padding: 10px 16px;
+      margin: 16px 0;
+      color: var(--text-muted);
+      font-size: 14px;
+      background: rgba(110, 118, 129, 0.06);
+      border-radius: 0 var(--radius) var(--radius) 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="preview-bar">
+    <span>📄 <strong>README 预览</strong> — 下方 iframe 为增强演示；GitHub 上仅显示封面图 + 外链（无法嵌入交互）</span>
+  </div>
+
+  <div class="repo-header">
+    <div class="repo-name">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 0 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.25.25 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z"/></svg>
+      1ivy403 / <strong>jellymate-desktop</strong>
+    </div>
+  </div>
+
+  <div class="readme-wrap">
+    <div class="readme-box">
+      <article class="markdown">
+
+        <h1>JellyMate 🪼</h1>
+        <p class="hero-lead"><strong>屏幕边缘的陪伴 —— 低打扰，有边界感。</strong></p>
+
+        <div class="badges">
+          <span class="badge blue">License: MIT</span>
+          <span class="badge">platform: macOS 12+</span>
+          <span class="badge">Release</span>
+        </div>
+
+        <div class="cta-row">
+          <a class="primary" href="https://jellymate-amber.vercel.app/download">⬇ 下载 macOS App</a>
+          <span class="dot">·</span>
+          <a href="https://jellymate-amber.vercel.app">产品页</a>
+          <span class="dot">·</span>
+          <a href="https://jellymate-amber.vercel.app/demo">🪼 查看演示</a>
+        </div>
+
+        <div class="demo-section">
+          <div class="demo-frame-wrap">
+            <iframe src="https://jellymate-amber.vercel.app/demo" title="JellyMate 演示" loading="lazy"></iframe>
+          </div>
+        </div>
+
+        <blockquote>
+          没有通知，没有弹窗，没有账号。<strong>一只住在屏幕边缘的水母，有自己的节奏，你也保留你的空间。</strong>
+        </blockquote>
+
+        <hr>
+
+        <h2>下载安装</h2>
+        <p>前往 <a href="https://jellymate-amber.vercel.app"><strong>产品页</strong></a> 下载，或从 <a href="https://github.com/1ivy403/jellymate-desktop/releases/latest">Releases</a> 选择对应架构的 DMG：</p>
+
+        <table>
+          <thead><tr><th>机型</th><th>文件</th></tr></thead>
+          <tbody>
+            <tr><td>Apple Silicon（M1 / M2 / M3 / M4）</td><td><code>JellyMate-x.x.x-arm64.dmg</code></td></tr>
+            <tr><td>Intel Mac</td><td><code>JellyMate-x.x.x.dmg</code></td></tr>
+          </tbody>
+        </table>
+
+        <div class="install-tip">
+          安装后若提示「无法打开」：Finder 中右键 App → <strong>打开</strong> → 确认允许即可。
+        </div>
+
+        <hr>
+
+        <h2>交互速查</h2>
+
+        <details>
+          <summary>展开完整交互表</summary>
+          <div class="details-body">
+            <table>
+              <thead><tr><th>交互</th><th>行为</th></tr></thead>
+              <tbody>
+                <tr><td>单击</td><td>水母游出，说一句话</td></tr>
+                <tr><td>双击</td><td>开始 / 退出 25 分钟专注计时</td></tr>
+                <tr><td>三击</td><td>隐身 / 恢复</td></tr>
+                <tr><td>四连击</td><td>触发 poke 反应</td></tr>
+                <tr><td>长按 0.8s</td><td>退下到屏幕边缘</td></tr>
+                <tr><td>拖拽</td><td>移动位置，靠近边缘自动吸附倾斜</td></tr>
+                <tr><td>贴边后朝边缘推</td><td>退下</td></tr>
+                <tr><td>靠近（≤130px）</td><td>进入好奇状态</td></tr>
+                <tr><td>3 分钟无互动</td><td>自动半透明，不打扰</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+
+        <p class="meta-line"><strong>心情系统：</strong> <code>calm</code> → <code>curious</code> → <code>focus</code> → <code>happy</code> → <code>poked</code> → <code>sleepy</code></p>
+        <p class="meta-line"><strong>新手引导：</strong> 首次启动 9 步交互引导；托盘菜单或 <code>Shift+T</code> 可随时重置。</p>
+
+        <hr>
+
+        <h2>本地开发</h2>
+        <p><strong>环境要求：</strong> Node.js 18+，macOS 12+</p>
+        <pre><code>git clone https://github.com/1ivy403/jellymate-desktop.git
+cd jellymate-desktop
+npm install
+npm start        <span class="comment"># Electron 开发模式</span>
+npm test         <span class="comment"># 渲染层测试</span>
+npm run build    <span class="comment"># 打包 DMG（macOS only）</span></code></pre>
+
+        <details>
+          <summary>项目结构 &amp; 架构</summary>
+          <div class="details-body">
+            <div class="tree">jellymate/
+├── src/
+│   ├── main.js
+│   ├── preload.js
+│   └── index.html
+├── assets/
+├── test/
+└── .github/</div>
+          </div>
+        </details>
+
+        <hr>
+
+        <h2>Roadmap</h2>
+        <ul class="roadmap">
+          <li>Windows 支持</li>
+          <li>多水母（同一屏幕可以有多只）</li>
+          <li>用户自定义心情触发词</li>
+          <li>插件 / 脚本 API</li>
+        </ul>
+
+        <hr>
+
+        <h2>License</h2>
+        <p><a href="#">MIT</a> © 2026 JellyMate</p>
+
+      </article>
+    </div>
+  </div>
+
+</body>
+</html>

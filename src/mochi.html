@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Mochi 预览</title>
+<style>
+  :root{
+    /* —— 可调参数 —— */
+    --size: 260px;          /* 水母显示大小 */
+    --eye-top: 41%;         /* 眼睛纵向位置（占身体高度） */
+    --eye-gap: 46px;        /* 两眼间距 */
+    --eye-w: 13px;
+    --eye-h: 17px;
+    --eye-color:#1b2130;
+  }
+  html,body{margin:0;height:100%;}
+  body{
+    background:#11151c;          /* demo 背景，正式桌宠时透明 */
+    display:flex;align-items:center;justify-content:center;
+    font-family:-apple-system,"PingFang SC",sans-serif;color:#9fb;
+    user-select:none;
+  }
+
+  /* 包一层做整体浮动 / Q弹（眼睛是子元素会一起动，不脱位） */
+  #mochi{
+    position:relative;width:var(--size);height:var(--size);
+    cursor:grab;
+    opacity:.8;                 /* 默认透明度 80% */
+    animation:float 6s ease-in-out infinite;
+  }
+  #mochi:active{cursor:grabbing;}
+  @keyframes float{
+    0%,100%{transform:translateY(-10px) rotate(-1.2deg);}
+    50%   {transform:translateY(10px)  rotate(1.2deg);}
+  }
+
+  /* 身体层：即梦烤好的透明 webm（含伞盖呼吸/触手飘）
+     四情绪用 4 条「渐变映射重上色」的 webm 切换，不用 CSS 滤镜 */
+  .body{
+    position:absolute;inset:0;width:100%;height:100%;
+    object-fit:contain;pointer-events:none;
+    transition:opacity .5s ease;
+  }
+
+  /* 眼睛层：代码画 + 鼠标追踪 + 眨眼 */
+  .eyes{
+    position:absolute;left:50%;top:var(--eye-top);
+    transform:translateX(-50%);
+    display:flex;gap:var(--eye-gap);z-index:3;pointer-events:none;
+    transition:transform .12s ease;
+  }
+  .eye{
+    width:var(--eye-w);height:var(--eye-h);background:var(--eye-color);
+    border-radius:50%;animation:blink 5.5s infinite;
+    transition:transform .12s ease;position:relative;
+  }
+  .eye::after{ /* 高光 */
+    content:"";position:absolute;left:22%;top:18%;
+    width:30%;height:28%;border-radius:50%;
+    background:rgba(255,255,255,.6);
+  }
+  @keyframes blink{0%,94%,100%{transform:scaleY(1);}97%{transform:scaleY(.1);}}
+
+  /* 四情绪 = 4 条重上色 webm（渐变映射，保留立体高光）：
+     平静=原图蓝 / 开心=奶油黄#FDFFAB / 焦虑=樱花粉#FFB7B2 / 低落=葡萄浅紫#D291BC */
+
+  /* 戳一下 Q 弹 */
+  #mochi.poked{animation:poked-wobble .7s ease-in-out;}
+  @keyframes poked-wobble{
+    0%{transform:rotate(0) scaleX(1) scaleY(1);}
+    12%{transform:rotate(-14deg) scaleX(1.16) scaleY(.84);}
+    28%{transform:rotate(12deg) scaleX(.84) scaleY(1.16);}
+    43%{transform:rotate(-8deg) scaleX(1.1) scaleY(.9);}
+    58%{transform:rotate(6deg) scaleX(.93) scaleY(1.08);}
+    72%{transform:rotate(-3deg) scaleX(1.04) scaleY(.97);}
+    100%{transform:rotate(0) scaleX(1) scaleY(1);}
+  }
+  #mochi.poked .eye:first-child{transform:scaleY(.6) translateX(3px)!important;animation:none!important;}
+  #mochi.poked .eye:last-child {transform:scaleY(.6) translateX(-3px)!important;animation:none!important;}
+
+  /* demo 控制条 */
+  #bar{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+    display:flex;gap:8px;background:#1c222c;padding:8px 10px;border-radius:12px;}
+  #bar button{font:inherit;font-size:12px;border:none;border-radius:8px;
+    padding:6px 12px;cursor:pointer;background:#2c3340;color:#cfe;}
+  #bar button:hover{background:#39424f;}
+</style>
+</head>
+<body>
+  <div id="mochi" class="mood-calm">
+    <video class="body" src="../assets/mochi_body.webm" autoplay loop muted playsinline></video>
+    <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+  </div>
+  <!-- 身体素材映射 -->
+  <script>window.MOCHI_BODY={calm:'../assets/mochi_body.webm',happy:'../assets/mochi_happy.webm',anxious:'../assets/mochi_anxious.webm',low:'../assets/mochi_low.webm'};</script>
+
+  <div id="bar">
+    <button data-m="calm">平静·蓝</button>
+    <button data-m="happy">开心·奶油黄</button>
+    <button data-m="anxious">焦虑·樱花粉</button>
+    <button data-m="low">低落·葡萄紫</button>
+  </div>
+
+<script>
+  const mochi = document.getElementById('mochi');
+  const eyes  = mochi.querySelector('.eyes');
+  const body  = mochi.querySelector('.body');
+
+  // —— 眼球追踪 —— (照搬 JellyMate: 朝鼠标偏移，封顶 6px)
+  let mx=innerWidth/2, my=innerHeight/2;
+  document.addEventListener('mousemove', e=>{ mx=e.clientX; my=e.clientY; });
+  setInterval(()=>{
+    const r = mochi.getBoundingClientRect();
+    const cx = r.left + r.width/2;
+    const cy = r.top + r.height*0.42;   // 以脸部为中心
+    const dx = mx-cx, dy = my-cy;
+    const d  = Math.hypot(dx,dy);
+    if(d>0 && d<600){
+      const s = Math.max(0,1-d/600);
+      const ox = dx/d*6*s, oy = dy/d*6*s;
+      eyes.style.transform = `translateX(calc(-50% + ${ox.toFixed(2)}px)) translateY(${oy.toFixed(2)}px)`;
+    } else {
+      eyes.style.transform = 'translateX(-50%)';
+    }
+  }, 32);
+
+  // —— 戳一下 ——
+  mochi.addEventListener('click', ()=>{
+    mochi.classList.remove('poked'); void mochi.offsetWidth;
+    mochi.classList.add('poked');
+    setTimeout(()=>mochi.classList.remove('poked'), 720);
+  });
+
+  // —— 情绪切换：换对应重上色 webm（短暂淡出淡入避免硬切） ——
+  function setMood(m){
+    mochi.className = 'mood-' + m;
+    const src = window.MOCHI_BODY[m];
+    if(body.getAttribute('src') === src) return;
+    body.style.opacity = '0';
+    setTimeout(()=>{ body.src = src; body.play(); body.style.opacity = '1'; }, 220);
+  }
+  document.querySelectorAll('#bar button').forEach(b=>{
+    b.onclick = (e)=>{ e.stopPropagation(); setMood(b.dataset.m); };
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,2707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mochi</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&display=swap');
+  :root{
+    --glow:#7fd8e8;--glow-soft:#a8e6ef;
+    --ink:#dce7f5;--ink-dim:#8fa4c4;
+    /* ── Mochi 视觉令牌（2026-06 Figma 高级治愈系，精确抽取）── */
+    --mc-grad1:#e2deef; --mc-grad2:#d8dfed; --mc-grad3:#dcdaf0;     /* 面板薰衣草底 */
+    --mc-surface:rgba(248,246,255,.74);        /* 顶栏/输入栏/底部 表面层 */
+    --mc-surface-strong:rgba(244,241,255,.92); /* 按钮/输入框 */
+    --mc-border:rgba(150,130,215,.22);         /* 常规描边 */
+    --mc-border-soft:rgba(165,145,225,.2);     /* 更淡描边（气泡/头像）*/
+    --mc-p1:#4848a0; --mc-p2:#6060b8;          /* 品牌紫渐变（用户气泡/发送/主按钮）*/
+    --mc-p-ink:#3838a0;                        /* 紫文字（激活态）*/
+    --mc-ink:#18143a; --mc-ink2:#1c1838; --mc-ink-strong:#0c0a22;  /* 正文/标题 */
+    --mc-ink-dim:#9090b8;                      /* 次要文字/日期 */
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  /* 全透明背景——鼠标由 main.js 控制穿透 */
+  html,body{
+    height:100%;width:100%;overflow:hidden;
+    background:transparent!important;
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    color:var(--ink);user-select:none;
+  }
+  /* 预览模式：非 Electron（浏览器/右侧预览）里给个浅色底，否则透明=黑屏看不见 */
+  body.preview{
+    background:radial-gradient(120% 120% at 70% 20%,#ece9f8 0%,#e0e3f3 55%,#d6d8ea 100%)!important;
+  }
+
+  /* ══════════════ 水母主体 ══════════════ */
+  #jelly-wrap{
+    position:fixed;width:230px;height:230px;
+    cursor:grab;z-index:50;
+    opacity:0;
+    transform: translateY(60px) rotate(-20deg) scale(0.6);
+    transition:opacity .8s ease, transform 1.2s cubic-bezier(.16,1,.3,1);
+    will-change:left,top,opacity,transform;
+  }
+  #jelly-wrap.visible{
+    opacity:.88;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  #jelly-wrap:active{cursor:grabbing;}
+
+  /* 情绪状态 CSS */
+  #jelly-wrap.emo-happy .body { filter: brightness(1.08) saturate(1.3) hue-rotate(8deg); }
+  #jelly-wrap.emo-happy #jelly-float { animation: float-happy 4s ease-in-out infinite; }
+  #jelly-wrap.emo-anxious .body { filter: brightness(0.95) saturate(1.2) hue-rotate(-15deg); }
+  #jelly-wrap.emo-anxious #jelly-float { animation: float-anxious 2.8s ease-in-out infinite; }
+  #jelly-wrap.emo-low .body { filter: brightness(0.85) saturate(0.7) hue-rotate(20deg); }
+  #jelly-wrap.emo-low #jelly-float { animation: float-low 9s ease-in-out infinite; }
+  #jelly-wrap.emo-calm #jelly-float { animation: float 6s ease-in-out infinite; }
+
+  /* 说话时轻微发光——加在 wrap 上避免与情绪 filter 冲突 */
+  #jelly-wrap.speaking { filter: drop-shadow(0 0 18px rgba(120,160,255,.55)) drop-shadow(0 0 6px rgba(180,200,255,.4)); transition: filter .3s ease; }
+  #jelly-wrap:not(.speaking) { filter: none; transition: filter .8s ease; }
+
+  /* 出场气泡 */
+  #jelly-greeting {
+    position:fixed; z-index:51;
+    background:rgba(255,255,255,.92); backdrop-filter:blur(12px);
+    border:1px solid rgba(200,200,240,.6);
+    border-radius:18px 18px 18px 4px;
+    padding:9px 16px; font-size:14px; color:#3a3a5a;
+    white-space:nowrap;
+    box-shadow:0 4px 20px rgba(80,80,140,.12);
+    opacity:0; pointer-events:none;
+    transform:translateY(8px) scale(0.9);
+    transition:opacity .4s ease, transform .4s cubic-bezier(.2,.9,.3,1.1);
+  }
+  #jelly-greeting.show { opacity:1; transform:translateY(0) scale(1); }
+
+  #jelly-float{
+    width:100%;height:100%;
+    animation:float 6s ease-in-out infinite;
+    pointer-events:none;
+  }
+  @keyframes float{0%,100%{transform:translateY(0) rotate(-1.5deg);}50%{transform:translateY(-22px) rotate(1.5deg);}}
+  @keyframes float-happy{0%,100%{transform:translateY(0) rotate(-2deg);}50%{transform:translateY(-28px) rotate(3deg);}}
+  @keyframes float-anxious{0%,100%{transform:translateY(0) rotate(-3deg);}25%{transform:translateY(-10px) rotate(2deg);}75%{transform:translateY(-14px) rotate(-2deg);}}
+  @keyframes float-low{0%,100%{transform:translateY(0) rotate(-0.5deg);}50%{transform:translateY(-12px) rotate(0.5deg);}}
+  @keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+
+  /* 身体层：即梦烤好的透明 webm（伞盖呼吸 / 触手飘 已内置）
+     在场态 = 安静/开心/想你 三条 webm 切换（见 JS setPresence） */
+  .body{
+    position:absolute;inset:0;width:100%;height:100%;
+    object-fit:contain;pointer-events:none;
+    transition:opacity .5s ease, filter 1.2s ease, transform .25s ease;
+  }
+
+  /* 眼睛层：代码画 + 鼠标追踪 + 眨眼（叠在身体脸部上） */
+  .eyes{
+    position:absolute;left:50%;top:41%;transform:translateX(-50%);
+    display:flex;gap:42px;z-index:3;pointer-events:none;
+    transition:transform .12s ease;
+  }
+  .eye{
+    width:12px;height:16px;background:#1b2130;border-radius:50%;
+    animation:blink 5.5s infinite;transition:transform .12s ease;position:relative;
+  }
+  .eye::after{ /* 高光 */
+    content:"";position:absolute;left:22%;top:18%;
+    width:30%;height:28%;border-radius:50%;background:rgba(255,255,255,.6);
+  }
+  @keyframes blink{0%,94%,100%{transform:scaleY(1);}97%{transform:scaleY(.1);}}
+
+  #jelly-wrap.dragging #jelly-float{animation-play-state:paused;}
+  #jelly-wrap.pressing #jelly-float{animation-play-state:paused;}
+  #jelly-wrap.pressing .body{transform:scaleY(.84) scaleX(1.12);}
+
+  #rot-wrap { width:100%; height:100%; }
+
+  /* ══════════════ 面板浮层（嵌自 diary-tab-v5，作用域隔离） ══════════════ */
+  #panel-host{
+    position:fixed; z-index:60; display:none;
+    opacity:0; transform:scale(.96);
+    transition:opacity .18s ease, transform .18s ease;
+  }
+  #panel-host.show{ display:block; opacity:1; transform:scale(1); }
+
+  /* ── PANEL ── */
+  .panel-wrap { position:relative; display:inline-block; user-select:none; }
+  .panel {
+    width:320px; height:640px;
+    display:flex; flex-direction:column;
+    /* 高级治愈系：薰衣草渐变底 + 轻磨砂 + 顶部高光 + 柔和大投影 */
+    background:linear-gradient(143deg,
+      color-mix(in srgb, var(--mc-grad1) 96%, transparent) 8%,
+      color-mix(in srgb, var(--mc-grad2) 96%, transparent) 54%,
+      color-mix(in srgb, var(--mc-grad3) 96%, transparent) 92%);
+    -webkit-backdrop-filter:blur(20px) saturate(1.4);
+    backdrop-filter:blur(20px) saturate(1.4);
+    border-radius:26px;
+    border:1px solid rgba(255,255,255,.55);
+    box-shadow:0 32px 80px rgba(30,20,80,.18),
+               0 8px 24px rgba(30,20,80,.08),
+               inset 0 1px 0 rgba(255,255,255,.6);
+    overflow:hidden; min-width:260px; min-height:460px;
+  }
+  /* 收起态：保留 标题栏 + 输入框 + 底部页面切换，藏掉大块内容 */
+  .panel.mini { height:auto !important; min-height:0 !important; }
+  .panel.mini #trendStrip,
+  .panel.mini #toolbar,
+  .panel.mini #listView,
+  .panel.mini #calView,
+  .panel.mini #settingsView,
+  .panel.mini #chatMsgs { display:none !important; }
+  /* 收起时强制显示输入行（哪怕当前停在日记 tab），且不抢高度 */
+  .panel.mini #chatView { display:flex !important; flex:0 0 auto !important; }
+  .panel.mini .chat-input { margin-top:6px; }
+  /* 玻璃上的分区条改半透，让磨砂质感透出来 */
+  .trend-strip, .diary-header { background:transparent !important; }
+
+  /* ── Header ── */
+  .panel-header { flex-shrink:0; display:flex; align-items:center; gap:10px; padding:16px 18px 13px; background:var(--mc-surface); border-bottom:1px solid var(--mc-border); cursor:grab; user-select:none; }
+  .panel-header:active { cursor:grabbing; }
+  .avatar { font-size:19px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:11px;
+    background:linear-gradient(135deg, rgba(120,100,200,.14), rgba(80,80,180,.07)); border:1px solid var(--mc-border-soft);
+    box-shadow:0 1px 4px rgba(96,80,160,.08); }
+  .hname  { font-family:"PingFang SC","Hiragino Sans GB",sans-serif; font-size:17px; font-weight:600; letter-spacing:-.4px; color:var(--mc-ink-strong); flex:1; }
+  .hbtn { width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer; border-radius:11px;
+    border:1px solid var(--mc-border); color:var(--mc-p-ink); background:var(--mc-surface-strong); box-shadow:0 1px 3px rgba(96,80,160,.06); transition:all .15s; }
+  .hbtn:hover,.hbtn.on { background:linear-gradient(135deg,var(--mc-p1),var(--mc-p2)); color:#fff; border-color:transparent; }
+
+  /* ── Trend ── */
+  .trend-strip { flex-shrink:0; border-bottom:1px solid rgba(150,130,215,.12); padding:14px 18px 12px; }
+  .trend-head { display:flex; align-items:center; margin-bottom:9px; }
+  .trend-title { font-family:"PingFang SC",sans-serif; font-size:14px; font-weight:600; color:var(--mc-ink2); flex:1; }
+  .trend-tabs  { display:flex; gap:2px; background:rgba(236,233,255,.7); border:1px solid var(--mc-border); border-radius:10px; padding:3px; }
+  .trend-tab   { font-family:"PingFang SC",sans-serif; font-size:12px; font-weight:500; color:var(--mc-ink-dim); padding:3px 12px; border-radius:8px; cursor:pointer; }
+  .trend-tab.on{ background:rgba(248,246,255,.98); color:var(--mc-p-ink); font-weight:600; box-shadow:0 1px 4px rgba(60,50,120,.12); }
+  .chart-wrap canvas { display:block; width:100% !important; }
+
+  /* ── Diary section header ── */
+  .diary-header { flex-shrink:0; padding:12px 18px 10px; display:flex; align-items:center; gap:8px; }
+  .diary-title { font-family:"PingFang SC",sans-serif; font-size:14px; font-weight:600; color:var(--mc-ink2); flex:1; }
+  .sort-btn { font-family:"PingFang SC",sans-serif; font-size:12px; font-weight:600; color:var(--mc-p-ink); background:rgba(120,100,200,.1); border:1px solid var(--mc-border); border-radius:9px; padding:5px 11px; cursor:pointer; }
+  .sort-btn.on { background:linear-gradient(135deg,var(--mc-p1),var(--mc-p2)); color:#fff; border-color:transparent; }
+
+  /* ── View icon toggle ── */
+  .view-icons { display:flex; gap:2px; }
+  .vi { width:30px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--mc-ink-dim); font-size:14px; transition:background .12s, color .12s; }
+  .vi:hover { background:rgba(236,233,255,.7); color:var(--mc-p-ink); }
+  .vi.on { background:linear-gradient(135deg,var(--mc-p1),var(--mc-p2)); color:#fff; }
+
+  /* ── List scroll ── */
+  .diary-scroll { flex:1; overflow-y:auto; padding:6px 12px 10px; display:flex; flex-direction:column; gap:5px; }
+  .diary-scroll::-webkit-scrollbar{width:4px;}
+  .diary-scroll::-webkit-scrollbar-track{background:transparent;}
+  .diary-scroll::-webkit-scrollbar-thumb{background:#dcdcee;border-radius:99px;}
+
+  .m-div{display:flex;align-items:center;gap:8px;margin:8px 0 4px;}
+  .m-txt{font-family:"PingFang SC",sans-serif;font-size:12px;font-weight:600;color:var(--mc-ink-dim);white-space:nowrap;}
+  .m-ln{flex:1;border-top:1px solid rgba(150,130,215,.14);}
+
+  /* ── Card base：高级治愈系 = 白卡 + 柔影，无彩色粗边；情绪只作文字色 + 小圆点 ── */
+  .card{cursor:pointer;flex-shrink:0;transition:transform .1s, box-shadow .15s; background:rgba(255,255,255,.86);
+    border:1px solid var(--mc-border-soft); border-radius:16px;
+    box-shadow:0 1px 12px rgba(60,50,120,.06), inset 0 1px 0 rgba(255,255,255,.8); overflow:hidden; }
+  .card:hover{transform:translateY(-1px); box-shadow:0 4px 18px rgba(60,50,120,.10);}
+  .card-head{display:flex;align-items:center;gap:7px;padding:12px 14px 10px;}
+  .card-body{display:none;padding:0 14px 13px;font-size:13.5px;color:var(--mc-ink);line-height:1.7;}
+  .card.open .card-body{display:block;}
+  .c-story{font-size:12px;color:var(--mc-ink-dim);line-height:1.7;font-style:italic;margin-top:7px;}
+  .mochi-q{display:flex;gap:6px;align-items:flex-start;margin-top:9px;padding:8px 10px;background:rgba(248,246,255,.7);border-radius:10px;border:1px solid var(--mc-border-soft);}
+  .mochi-q-t{font-size:11px;color:#8888a8;font-style:italic;line-height:1.55;}
+  /* 情绪标签：文字色按情绪，字体随正文（去手写体）*/
+  .e-tag{font-family:"PingFang SC",sans-serif;font-size:13px;font-weight:700;line-height:1;flex-shrink:0;}
+  .e-tag.calm,.day-card.calm .e-tag,.week-card.calm .e-tag,.month-card.calm .e-tag{color:#2a9868;}
+  .e-tag.happy,.day-card.happy .e-tag,.week-card.happy .e-tag,.month-card.happy .e-tag{color:#c08808;}
+  .e-tag.anxious,.day-card.anxious .e-tag,.week-card.anxious .e-tag,.month-card.anxious .e-tag{color:#c83050;}
+  .e-tag.low,.day-card.low .e-tag,.week-card.low .e-tag,.month-card.low .e-tag{color:#5858b8;}
+
+  .day-date,.w-range,.mo-period{font-size:11px;color:var(--mc-ink-dim);flex:1;}
+  .mo-summary{font-size:14px;font-weight:600;color:var(--mc-ink2);line-height:1.65;}
+
+  /* 周/月徽标：低调薰衣草胶囊（不再用情绪色填充）*/
+  .w-badge,.mo-badge{font-family:"PingFang SC",sans-serif;font-size:11px;font-weight:600;color:var(--mc-p-ink);
+    background:rgba(120,100,200,.12);padding:3px 8px;border-radius:7px;flex-shrink:0;}
+  /* 月卡稍重一档：顶部一条淡紫描边以示分量 */
+  .month-card{border-top:2px solid rgba(120,100,200,.22);}
+  /* 空状态卡（保留样式，当前不用）*/
+  .day-card.empty{background:rgba(250,250,254,.6);border-style:dashed;box-shadow:none;}
+  .day-card.empty .day-date{color:#c8c8e0;}
+  .day-card.empty .e-tag{color:#d0d0e8;font-style:italic;}
+
+  /* ── Calendar view ── */
+  .cal-view { display:none; flex-direction:column; flex:1; overflow-y:auto; margin:4px 14px 12px; padding:14px 12px;
+    background:rgba(255,255,255,.6); border:1px solid var(--mc-border-soft); border-radius:18px; box-shadow:0 2px 16px rgba(96,80,160,.06); }
+  .cal-view::-webkit-scrollbar{width:4px;}
+  .cal-view::-webkit-scrollbar-thumb{background:#dcdcee;border-radius:99px;}
+  .cal-view.active{display:flex;}
+  .cal-nav { display:flex; align-items:center; margin-bottom:12px; flex-shrink:0; }
+  .cal-nav-btn { font-size:18px; color:var(--mc-ink-dim); cursor:pointer; padding:0 8px; border-radius:8px; line-height:1; }
+  .cal-nav-btn:hover { background:rgba(236,233,255,.7); color:var(--mc-p-ink); }
+  .cal-month-lbl { font-family:"PingFang SC",sans-serif; font-size:16px; font-weight:600; color:var(--mc-ink2); flex:1; text-align:center; }
+  .cal-dow-row { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:4px; flex-shrink:0; }
+  .cal-dow { text-align:center; font-size:10px; font-weight:600; color:var(--mc-ink-dim); padding:2px 0; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; flex-shrink:0; }
+  .day-item { display:flex; flex-direction:column; align-items:center; gap:3px; position:relative; }
+  /* 克制上色：格子留白，仅小圆点点缀；今日紫环 */
+  .cal-cell { width:100%; aspect-ratio:1; border-radius:11px; display:flex; align-items:center; justify-content:center; position:relative; cursor:pointer; transition:transform .12s, background .12s; overflow:visible; }
+  .cal-cell:hover { background:rgba(236,233,255,.7); transform:scale(1.06); z-index:5; }
+  .cal-cell.other-month { opacity:0; pointer-events:none; }
+  .cal-cell.no-record, .cal-cell.future { cursor:default; }
+  .cal-cell.no-record:hover, .cal-cell.future:hover { transform:none; background:transparent; }
+  .cal-cell.today { box-shadow:inset 0 0 0 2px var(--mc-p2); }
+  .cell-mark { width:7px; height:7px; border-radius:50%; pointer-events:none; flex-shrink:0; }
+  .cal-cell.calm    .cell-mark { background:#2a9868; }
+  .cal-cell.happy   .cell-mark { background:#c08808; }
+  .cal-cell.anxious .cell-mark { background:#c83050; }
+  .cal-cell.low     .cell-mark { background:#5858b8; }
+  .cal-cell.no-record .cell-mark,
+  .cal-cell.future    .cell-mark { display:none; }
+  .cell-date { font-size:9.5px; color:var(--mc-ink-dim); line-height:1; }
+  .day-item.today-item .cell-date { color:var(--mc-p-ink); font-weight:700; }
+  .cell-book { display:flex; flex-direction:column; align-items:center; gap:1px; pointer-events:none; line-height:1; }
+  .book-icon { font-size:13px; line-height:1; }
+  .book-lbl  { font-family:"PingFang SC",sans-serif; font-size:9px; font-weight:600; color:#fff; background:rgba(96,96,184,.7); padding:0px 4px; border-radius:4px; line-height:1.5; }
+
+  /* ── Floating popup ── */
+  #calPopup { position:fixed; z-index:9999; display:none; background:#fff; border:1.5px solid #e0e0f4; border-radius:14px; box-shadow:0 8px 32px rgba(80,80,140,.18); padding:12px 14px; min-width:160px; max-width:360px; pointer-events:auto; }
+  #calPopup .popup-inner { display:flex; gap:10px; }
+  .popup-card { flex:1; min-width:140px; font-size:12px; color:#3a3a5a; line-height:1.65; }
+  .popup-card + .popup-card { padding-left:10px; border-left:1.5px solid #ececf8; }
+  .pc-type { font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:#b0b0c8; margin-bottom:4px; }
+  .pc-tag  { font-family:"PingFang SC",sans-serif; font-size:13px; font-weight:700; margin-bottom:5px; display:block; }
+  .pc-text { font-size:12px; color:#3a3a5a; line-height:1.65; }
+  .pc-story{ font-size:11px; color:#7878a0; font-style:italic; margin-top:5px; line-height:1.6; }
+  .pc-mochi{ display:flex;gap:4px;align-items:flex-start;margin-top:7px;padding:5px 7px;background:#f8f8ff;border-radius:7px;border:1px dashed #e0e0f4; }
+  .pc-mochi-t{ font-size:10px;color:#9898b8;font-style:italic;line-height:1.4; }
+  .popup-close { position:absolute; top:8px; right:10px; font-size:13px; color:#c0c0d8; cursor:pointer; }
+  .popup-close:hover { color:#8080b0; }
+
+  /* ── Seg ── */
+  .seg-wrap { flex-shrink:0; padding:10px 14px 16px; background:var(--mc-surface); }
+  .seg-ctrl { display:flex; gap:2px; background:rgba(236,233,255,.84); border:1px solid var(--mc-border); border-radius:16px; padding:5px; }
+  .seg-item { flex:1; text-align:center; font-family:"PingFang SC",sans-serif; font-size:14px; font-weight:400; padding:9px 0; border-radius:12px; color:var(--mc-ink-dim); cursor:pointer; transition:all .15s; }
+  .seg-item.on { background:rgba(248,246,255,.98); color:var(--mc-p-ink); font-weight:600; box-shadow:0 1px 6px rgba(60,50,120,.14); }
+
+  /* ── Chat bubbles ── */
+  .msg { font-size:15px; line-height:1.55; padding:10px 15px; border-radius:16px; max-width:78%; }
+  /* Mochi 气泡：近白 + 极淡薰衣草描边 + 顶部高光 + 左上尾角；左侧带小水母头像（CSS 生成，无需改 DOM）*/
+  .msg.mochi { position:relative; margin-left:36px; background:rgba(255,255,255,.92); color:var(--mc-ink);
+    align-self:flex-start; border:1px solid var(--mc-border-soft);
+    border-radius:16px; border-top-left-radius:4px;
+    box-shadow:0 1px 12px rgba(60,50,120,.08), inset 0 1px 0 rgba(255,255,255,.9); }
+  .msg.mochi::before { display:none; }
+  .mochi-avatar { position:absolute; left:-36px; bottom:0; width:28px; height:28px;
+    border-radius:50%; overflow:hidden; border:1.5px solid rgba(180,200,240,.5);
+    background:#f0f4ff; }
+  .mochi-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+  /* 连续 Mochi 消息：只有第一个显示头像，后续隐藏并缩小间距 */
+  .msg.mochi + .msg.mochi::before,
+  .msg.mochi + .chat-card + .msg.mochi::before { display:none; }
+  .msg.mochi + .msg.mochi,
+  .msg.mochi + .chat-card + .msg.mochi { margin-top:3px; border-top-left-radius:16px; }
+  /* 用户气泡：品牌紫渐变 + 右上尾角 + 柔和投影 */
+  .msg.user  { background:linear-gradient(156deg,var(--mc-p1),var(--mc-p2)); color:#fff; align-self:flex-end;
+    border-radius:16px; border-top-right-radius:4px; box-shadow:0 2px 6px rgba(72,72,160,.28); }
+
+  /* ── Chat input bar + ✦ 生成今日情绪卡 ── */
+  .chat-input { margin:0; background:var(--mc-surface); border-top:1px solid var(--mc-border); padding:11px 14px 10px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .chat-input .ci-input { flex:1; background:var(--mc-surface-strong); border:1px solid var(--mc-border); border-radius:14px; padding:11px 15px; font-size:15px; color:#2a2a3a; resize:none; outline:none; font-family:inherit; line-height:1.45; max-height:96px; overflow-y:auto; }
+  .chat-input .ci-input::placeholder { color:rgba(28,24,56,.4); }
+  .chat-input .ci-input:focus { border-color:var(--mc-p2); }
+  .ci-spark { position:relative; width:38px; height:38px; border-radius:12px; background:var(--mc-surface-strong); border:1px solid var(--mc-border); color:var(--mc-p-ink); display:flex; align-items:center; justify-content:center; font-size:15px; cursor:pointer; box-shadow:0 1px 4px rgba(96,80,160,.07); transition:all .15s; flex-shrink:0; }
+  .ci-spark:hover { background:linear-gradient(135deg,var(--mc-p1),var(--mc-p2)); color:#fff; border-color:transparent; }
+  /* 悬停气泡：生成今日情绪日记 */
+  .ci-spark::after{
+    content:attr(data-tip);
+    position:absolute; bottom:calc(100% + 9px); left:0;
+    transform:translateY(4px);
+    background:rgba(42,42,58,.94); color:#fff; font-size:11px; line-height:1; white-space:nowrap;
+    padding:6px 10px; border-radius:7px; box-shadow:0 6px 18px rgba(0,0,0,.2);
+    opacity:0; pointer-events:none; transition:opacity .15s ease, transform .15s ease; z-index:20;
+  }
+  .ci-spark::before{
+    content:''; position:absolute; bottom:calc(100% + 4px); left:10px;
+    transform:translateY(4px);
+    border:5px solid transparent; border-top-color:rgba(42,42,58,.94);
+    opacity:0; pointer-events:none; transition:opacity .15s ease, transform .15s ease; z-index:20;
+  }
+  .ci-spark:hover::after, .ci-spark:hover::before{ opacity:1; transform:translateY(0); }
+  .ci-send { width:38px;height:38px;background:linear-gradient(135deg,var(--mc-p1),var(--mc-p2));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;flex-shrink:0;box-shadow:0 2px 6px rgba(72,72,160,.28);cursor:pointer; }
+
+  /* chart tooltip */
+  #ctip { position:fixed;display:none;z-index:9999;background:#fff;border:1.5px solid #e0e0f4;border-radius:10px;box-shadow:0 4px 16px rgba(80,80,140,.14);padding:9px 12px;max-width:175px;pointer-events:none; }
+  #ctip .td{font-family:"PingFang SC",sans-serif;font-weight:600;font-size:12px;color:var(--mc-ink2);margin-bottom:3px;}
+  #ctip .tt{font-size:11.5px;color:#3a3a5a;line-height:1.55;}
+  #ctip .ts{font-size:11px;color:#7878a0;font-style:italic;margin-top:5px;padding-top:5px;border-top:1px dashed #e8e8f4;display:none;}
+
+  /* ── 今日情绪签到卡（空状态引导：当天没聊过时固定在聊天框，点击触发聊天）── */
+  .checkin-card{ margin:0 14px 10px; flex-shrink:0; background:rgba(248,246,255,.7); border:1px solid rgba(160,140,225,.26); border-radius:20px; box-shadow:0 2px 20px rgba(96,80,160,.05); padding:18px 16px 16px; }
+  .checkin-title{ text-align:center; font-size:10px; color:var(--mc-ink-dim); letter-spacing:2.2px; }
+  .checkin-sub{ text-align:center; font-size:14px; color:var(--mc-ink2); margin:10px 0 16px; }
+  .checkin-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .checkin-opt{ display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.55); border:1px solid rgba(180,160,220,.18); border-radius:12px; padding:11px 14px; cursor:pointer; font-size:13px; color:var(--mc-ink2); transition:all .15s; }
+  .checkin-opt:hover{ background:#fff; border-color:var(--mc-border); transform:translateY(-1px); }
+  .checkin-dot{ width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+
+  /* ── 日记 tab 未读小红点 ── */
+  .seg-item{ position:relative; }
+  .seg-item .unread{ position:absolute; top:3px; right:10px; width:7px; height:7px; border-radius:50%; background:#e06070; box-shadow:0 0 0 2px rgba(255,255,255,.7); }
+
+  /* ── 生成中：呼吸小点 ── */
+  .gen-thinking .gen-dots{ display:inline-flex; gap:3px; margin-left:5px; vertical-align:middle; }
+  .gen-thinking .gen-dots i{ width:4px; height:4px; border-radius:50%; background:#a0a0c0; display:inline-block; animation:genDot 1.2s infinite; }
+  .gen-thinking .gen-dots i:nth-child(2){ animation-delay:.2s; }
+  .gen-thinking .gen-dots i:nth-child(3){ animation-delay:.4s; }
+  @keyframes genDot{ 0%,60%,100%{opacity:.3;transform:translateY(0);} 30%{opacity:1;transform:translateY(-3px);} }
+
+  /* ── 软推送进聊天的情绪卡（仪式感 + 治愈） ── */
+  .chat-card{ align-self:stretch; position:relative; overflow:visible; border-radius:18px; padding:16px 16px 14px; margin:4px 0 2px;
+    background:rgba(255,255,255,.9); border:1px solid var(--mc-border-soft);
+    box-shadow:0 2px 20px rgba(96,80,160,.07), inset 0 1px 0 rgba(255,255,255,.9); }
+  .chat-card .cc-glow{ display:none; }
+  .chat-card>*{ position:relative; }
+  .chat-card .cc-head{ display:flex; align-items:baseline; gap:7px; margin-bottom:7px; }
+  .chat-card .cc-date{ font-size:11px; color:var(--mc-ink-dim); }
+  .chat-card .cc-emo{ font-family:"PingFang SC",sans-serif; font-size:16px; font-weight:700; color:#c83050; line-height:1; }
+  .chat-card .cc-emo.happy  { color:#c08808; }
+  .chat-card .cc-emo.calm   { color:#2a9868; }
+  .chat-card .cc-emo.low    { color:#5858b8; }
+  .chat-card .cc-emo.anxious{ color:#c83050; }
+  .chat-card .cc-text{ font-size:14px; color:var(--mc-ink); line-height:1.65; }
+  .chat-card .cc-mochi{ font-size:12px; color:var(--mc-ink-dim); font-style:italic; margin-top:9px; line-height:1.55; }
+  .chat-card.reveal{ animation:ccReveal .65s cubic-bezier(.2,.9,.3,1.15); }
+  @keyframes ccReveal{ 0%{opacity:0;transform:translateY(12px) scale(.92);} 100%{opacity:1;transform:translateY(0) scale(1);} }
+
+  /* ── 明信片（周/月软送达）：同白卡语言，仅徽标点缀 ── */
+  .chat-card.postcard{ background:rgba(255,255,255,.9); border-color:var(--mc-border-soft);
+    box-shadow:0 2px 20px rgba(96,80,160,.07), inset 0 1px 0 rgba(255,255,255,.9); }
+  .chat-card .cc-ribbon{ display:inline-block; font-size:11px; color:var(--mc-p-ink); background:rgba(120,100,200,.12); border-radius:8px; padding:3px 9px; margin-bottom:9px; font-weight:600; }
+
+  /* ── 日记置顶的明信片 ── */
+  .pinned-postcard{ position:relative; margin:0 0 10px; border-radius:16px; padding:13px 14px;
+    background:rgba(255,255,255,.9); border:1px solid var(--mc-border-soft); box-shadow:0 2px 16px rgba(96,80,160,.08); }
+  .pinned-postcard.unread{ animation:ppGlow 2.6s ease-in-out infinite; }
+  @keyframes ppGlow{ 0%,100%{box-shadow:0 2px 16px rgba(96,80,160,.08);} 50%{box-shadow:0 4px 22px rgba(96,80,160,.26);} }
+  .pinned-postcard .pp-top{ display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+  .pinned-postcard .pp-pin{ font-size:11px; color:var(--mc-p-ink); font-weight:600; background:rgba(120,100,200,.12); border-radius:7px; padding:3px 8px; }
+  .pinned-postcard .pp-dot{ width:7px;height:7px;border-radius:50%;background:#c83050;margin-left:auto; }
+  .pinned-postcard .pp-emo{ font-family:"PingFang SC",sans-serif; font-weight:700; font-size:14px; }
+  .pinned-postcard .pp-text{ font-size:13.5px; color:var(--mc-ink); line-height:1.6; margin-top:4px; }
+  .pinned-postcard .pp-story{ font-size:12px;color:var(--mc-ink-dim);font-style:italic;margin-top:6px;line-height:1.6; }
+
+  /* ── 叙事长文「展开/收起」（周记100-200字、月记400-600字，长度不固定，超长才折叠）──
+     收起态：只露前 ~3 行正文预览 + 底部渐隐，点「展开」把卡片撑开露全文 ── */
+  .story-clamp{ position:relative; max-height:72px; overflow:hidden; }
+  .story-clamp.open{ max-height:none; }
+  .story-clamp:not(.open)::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:22px;
+    background:linear-gradient(rgba(247,248,253,0), rgba(247,248,253,.96)); pointer-events:none; }
+  .story-more{ display:inline-block; margin-top:4px; padding:0; border:none; background:none; cursor:pointer;
+    font-size:10.5px; color:#7a86c8; font-weight:700; }
+  .story-more:hover{ text-decoration:underline; }
+
+  /* ── 设置视图 ── */
+  .hbtn.on{ color:#6868b8; }
+  .set-title{ font-family:"PingFang SC",sans-serif; font-size:22px; font-weight:700; color:var(--mc-ink-strong); margin-bottom:18px; }
+  .set-field{ margin-bottom:14px; }
+  .set-label{ display:block; font-size:11px; color:var(--mc-p-ink); margin-bottom:7px; font-weight:600; letter-spacing:1px; text-transform:uppercase; }
+  .set-input{ width:100%; box-sizing:border-box; padding:12px 14px; font-size:14px; border:1px solid var(--mc-border); border-radius:14px; background:var(--mc-surface-strong); color:var(--mc-ink); outline:none; }
+  .set-input:focus{ border-color:var(--mc-p2); }
+  .set-note{ font-size:11px; color:var(--mc-ink-dim); line-height:1.7; margin-top:9px; }
+  .set-save{ width:100%; font-family:"PingFang SC",sans-serif; font-size:15px; font-weight:600; color:#fff; background:linear-gradient(135deg,var(--mc-p1),var(--mc-p2)); border:none; border-radius:14px; padding:13px 0; margin-top:6px; cursor:pointer; box-shadow:0 2px 8px rgba(72,72,160,.22); }
+  .set-save:hover{ filter:brightness(1.05); }
+  .set-saved{ display:none; font-size:12px; color:#2a9868; margin-top:10px; text-align:center; }
+  .set-back{ align-self:flex-start; font-family:"PingFang SC",sans-serif; font-size:13px; font-weight:500; color:var(--mc-ink-dim); background:none; border:none; padding:4px 2px; margin-top:14px; cursor:pointer; transition:color .15s; }
+  .set-back:hover{ color:var(--mc-p-ink); }
+</style>
+</head>
+<body>
+
+<div id="jelly-wrap">
+  <div id="rot-wrap">
+  <div id="jelly-float">
+    <video class="body" src="../assets/mochi_body.webm" autoplay loop muted playsinline></video>
+    <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+  </div>
+  </div>
+</div>
+<div id="jelly-greeting"></div>
+
+<!-- ══════════════ 面板浮层（嵌自 diary-tab-v5） ══════════════ -->
+<div id="panel-host">
+  <div class="panel-wrap" id="pw">
+
+    <div class="panel" id="panel">
+
+      <!-- Header -->
+      <div class="panel-header">
+        <div class="avatar"><img src="../assets/mochi_avatar.webp" style="width:26px;height:26px;object-fit:cover;border-radius:50%;display:block;"></div>
+        <div class="hname">Mochi</div>
+        <div class="hbtn" id="gearBtn" onclick="openSettings()" style="font-size:13px;" title="设置">⚙</div>
+      </div>
+
+      <!-- Trend -->
+      <div class="trend-strip" id="trendStrip">
+        <div class="trend-head">
+          <div class="trend-title">✦ 情绪走势</div>
+          <div class="trend-tabs">
+            <div class="trend-tab on" id="tabW" onclick="setTab('week')">周</div>
+            <div class="trend-tab"    id="tabM" onclick="setTab('month')">月</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chart" height="96"></canvas></div>
+      </div>
+
+      <!-- Diary section header -->
+      <div class="diary-header" id="toolbar">
+        <div class="diary-title">✦ 情绪日记</div>
+        <div class="sort-btn" id="sortBtn" onclick="toggleSort()">⇅ 时间线</div>
+        <div class="view-icons">
+          <div class="vi on" id="vsL" onclick="setView('list')" title="列表">&#9776;</div>
+          <div class="vi"    id="vsC" onclick="setView('cal')"  title="日历">⊞</div>
+        </div>
+      </div>
+
+      <!-- LIST VIEW（由 renderList() 从单一数据源生成） -->
+      <div class="diary-scroll" id="listView"></div>
+
+      <!-- CALENDAR VIEW -->
+      <div class="cal-view" id="calView">
+        <div class="cal-nav">
+          <div class="cal-nav-btn" onclick="calNav(-1)">‹</div>
+          <div class="cal-month-lbl" id="calLbl"></div>
+          <div class="cal-nav-btn" onclick="calNav(1)">›</div>
+        </div>
+        <div class="cal-dow-row">
+          <div class="cal-dow">一</div><div class="cal-dow">二</div><div class="cal-dow">三</div>
+          <div class="cal-dow">四</div><div class="cal-dow">五</div><div class="cal-dow">六</div><div class="cal-dow">日</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+
+      <!-- CHAT VIEW -->
+      <div id="chatView" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+        <div id="chatMsgs" style="flex:1;overflow-y:auto;padding:12px 14px 8px;display:flex;flex-direction:column;gap:7px;">
+        </div>
+        <!-- 今日情绪签到：当天还没聊过时固定显示，点击任一情绪触发聊天（空状态判定见 updateCheckIn）-->
+        <div class="checkin-card" id="checkInCard" style="display:none;">
+          <div class="checkin-title">今天感觉怎么样？</div>
+          <div class="checkin-grid">
+            <div class="checkin-opt" onclick="checkInPick('happy')"><span class="checkin-dot" style="background:#c08808"></span>开心</div>
+            <div class="checkin-opt" onclick="checkInPick('calm')"><span class="checkin-dot" style="background:#2a9868"></span>平静</div>
+            <div class="checkin-opt" onclick="checkInPick('low')"><span class="checkin-dot" style="background:#5858b8"></span>低落</div>
+            <div class="checkin-opt" onclick="checkInPick('anxious')"><span class="checkin-dot" style="background:#c83050"></span>焦虑</div>
+          </div>
+        </div>
+        <div class="chat-input">
+          <div class="ci-spark" id="ciSpark" onclick="genCardScript()" data-tip="生成今日情绪日记">✦</div>
+          <textarea id="chatInput" class="ci-input" placeholder="说点什么…" rows="1" autocomplete="off" spellcheck="false"></textarea>
+          <div class="ci-send" id="chatSendBtn" onclick="sendChat()">↑</div>
+        </div>
+      </div>
+
+      <!-- SETTINGS VIEW -->
+      <div id="settingsView" style="display:none;flex:1;flex-direction:column;overflow-y:auto;padding:14px 16px;">
+        <div class="set-title">设置</div>
+        <div class="set-field">
+          <label class="set-label">API 提供商</label>
+          <select id="apiProviderSelect" class="set-input" style="cursor:pointer;">
+            <option value="quickrouter">QuickRouter（推荐，国内可用）</option>
+            <option value="anthropic">Anthropic 官方</option>
+            <option value="openai">OpenAI 格式兼容（DeepSeek 等）</option>
+          </select>
+        </div>
+        <div class="set-field" id="apiBaseField" style="display:none;">
+          <label class="set-label">API Base URL</label>
+          <input id="apiBaseInput" class="set-input" type="text" placeholder="https://api.deepseek.com">
+        </div>
+        <div class="set-field">
+          <label class="set-label">API Key</label>
+          <input id="apiKeyInput" class="set-input" type="password" placeholder="粘贴你的 API Key" autocomplete="off" spellcheck="false">
+          <div class="set-note">只用于你自己的对话，存储在 Supabase，安全可靠。</div>
+        </div>
+        <button class="set-save" onclick="saveSettings()">保存</button>
+        <div id="setSaved" class="set-saved">已保存 ✓</div>
+        <button class="set-back" onclick="switchMainTab(lastMainTab)">‹ 返回</button>
+      </div>
+
+      <div class="seg-wrap">
+        <div class="seg-ctrl">
+          <div class="seg-item on" id="tabChat" onclick="switchMainTab('chat')">聊天</div>
+          <div class="seg-item" id="tabDiary" onclick="switchMainTab('diary')">日记</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /panel-host -->
+
+<!-- 浮窗放在 panel-host 外：panel-host 有 transform(scale)，会让内部 position:fixed 相对它定位而错位 -->
+<!-- chart tooltip -->
+<div id="ctip"><div class="td" id="ctd"></div><div class="tt" id="ctt"></div><div class="ts" id="cts"></div></div>
+<!-- calendar popup -->
+<div id="calPopup">
+  <span class="popup-close" onclick="closePopup()">✕</span>
+  <div class="popup-inner" id="popupInner"></div>
+</div>
+
+<script>
+// ── Electron IPC 桥（不在 Electron 里时降级为空函数）──
+const api = window.electronAPI || {
+  mouseEnterJelly: ()=>{}, mouseLeaveJelly: ()=>{},
+  panelOpen: ()=>{}, panelClose: ()=>{},
+  hitInteractive: ()=>{}, hitPassthrough: ()=>{},
+  onCursorPos: ()=>{},
+};
+const IS_ELECTRON = !!window.electronAPI;
+
+// ── 引用 ──
+const wrap   = document.getElementById('jelly-wrap');
+const eyesEl = wrap.querySelector('.eyes');
+const bodyEl = wrap.querySelector('.body');
+
+// ── 身体素材：3 个在场态 webm（安静=原图蓝 / 开心=奶油黄 / 想你=雾紫）──
+const MOCHI_BODY = {
+  calm:  '../assets/mochi_body.webm',  // 安静
+  happy: '../assets/mochi_happy.webm', // 开心
+  low:   '../assets/mochi_low.webm',   // 想你（雾紫）
+};
+let _bodyKey = 'calm';
+function setBody(key){
+  if(!MOCHI_BODY[key] || key === _bodyKey) return;
+  _bodyKey = key;
+  bodyEl.style.opacity = '0';
+  setTimeout(() => {
+    bodyEl.src = MOCHI_BODY[key];
+    const p = bodyEl.play();
+    if(p && p.catch) p.catch(()=>{});
+    bodyEl.style.opacity = '';
+  }, 220);
+}
+
+// ── 位置 ──
+let posX = 0, posY = 0;
+let wrapW = 230, wrapH = 230; // 缓存尺寸，避免每帧读布局
+function initPosition(){
+  wrapW = wrap.offsetWidth  || wrapW;
+  wrapH = wrap.offsetHeight || wrapH;
+  posX = window.innerWidth  - wrapW - 30;
+  posY = window.innerHeight - wrapH - 20;
+  applyPos();
+}
+function applyPos(){
+  wrap.style.left = posX + 'px';
+  wrap.style.top  = posY + 'px';
+}
+function animateTo(x, y, dur=1.1){
+  const ease = `cubic-bezier(.25,.9,.3,1)`;
+  wrap.style.transition = `left ${dur}s ${ease},top ${dur}s ${ease}`;
+  // 松手落定后，面板甩到「水母新位置空间更大的那一侧」，避免压住水母
+  if(panelVisible){
+    const host = document.getElementById('panel-host');
+    if(host){
+      const p = document.getElementById('panel');
+      const W = window.innerWidth, H = window.innerHeight;
+      const pw = p ? p.offsetWidth  : PANEL_W;
+      const ph = p ? p.offsetHeight : PANEL_H;
+      const petCx = x + wrapW / 2;
+      let hl = (petCx > W / 2) ? x - pw - PANEL_GAP : x + wrapW + PANEL_GAP;
+      hl = Math.max(8, Math.min(hl, W - pw - 8));
+      let ht = y + wrapH / 2 - ph / 2;
+      ht = Math.max(8, Math.min(ht, H - ph - 8));
+      host.style.transition = `left ${dur}s ${ease},top ${dur}s ${ease}`;
+      host.style.left = hl + 'px'; host.style.top = ht + 'px';
+      setTimeout(() => host.style.transition = '', dur*1000+50);
+    }
+  }
+  posX = x; posY = y; applyPos();
+  setTimeout(() => wrap.style.transition = '', dur*1000+50);
+}
+
+// ── 在场态：按「上次互动时间」切换 安静 / 开心 / 想你 ──
+//   开心 = 近期有互动；安静 = 超过 2 小时无互动；想你 = 超过 1 天无互动
+const PRESENCE_QUIET = 2 * 60 * 60 * 1000; // 2h
+const PRESENCE_MISS  = 24 * 60 * 60 * 1000; // 1天
+let lastInteraction = Date.now();
+let hasInteracted = false; // 开机还没互动过 → 保持安静蓝，不显示「开心」
+function recordInteraction(){
+  hasInteracted = true;
+  lastInteraction = Date.now();
+  refreshPresence();
+}
+function refreshPresence(){
+  const idle = Date.now() - lastInteraction;
+  if(hasInteracted && idle >= PRESENCE_MISS){
+    setBody('low');
+  } else {
+    setBody('calm');
+  }
+}
+
+// ── 水母情绪状态（CSS class 驱动）──
+// emo: 'happy'|'calm'|'anxious'|'low'|null
+// speaking: Mochi 说话时短暂发光
+const EMO_STATES = ['emo-happy','emo-calm','emo-anxious','emo-low'];
+let _currentEmo = null;
+let _speakTimer = null;
+
+function setJellyEmo(emo){
+  if(emo === _currentEmo) return;
+  _currentEmo = emo;
+  EMO_STATES.forEach(c=>wrap.classList.remove(c));
+  if(emo) wrap.classList.add('emo-'+emo);
+}
+
+function setJellySpeaking(duration=2200){
+  wrap.classList.add('speaking');
+  clearTimeout(_speakTimer);
+  _speakTimer = setTimeout(()=> wrap.classList.remove('speaking'), duration);
+}
+
+// 每次 Mochi 回复后，用 AI 快速判断情绪色彩，驱动水母状态
+async function updateJellyEmoFromReply(replyText){
+  // 简单关键词判断，避免额外 API 调用
+  const text = replyText;
+  if(/开心|高兴|棒|好耶|哈|笑|轻松|愉快/.test(text)){
+    setJellyEmo('happy');
+  } else if(/焦虑|紧张|担心|压力|烦|慌|难受|喘不过气/.test(text)){
+    setJellyEmo('anxious');
+  } else if(/低落|空|累|沉|难|寂寞|孤独|沮丧|失落/.test(text)){
+    setJellyEmo('low');
+  } else {
+    setJellyEmo('calm');
+  }
+  setJellySpeaking();
+  // 情绪状态持续 30 秒后回到平静
+  clearTimeout(window._emoResetTimer);
+  window._emoResetTimer = setTimeout(()=> setJellyEmo('calm'), 30000);
+}
+setInterval(refreshPresence, 60 * 1000);
+
+// ── 面板开关（点击水母 = 开/关面板）──
+let panelVisible = false;
+const PANEL_W = 320, PANEL_H = 640, PANEL_GAP = 16;
+function positionPanel(host){
+  // 朝空间大的一侧弹出，始终落在视口内
+  const W = window.innerWidth, H = window.innerHeight;
+  const petCx = posX + wrapW / 2;
+  let left = (petCx > W / 2)
+    ? posX - PANEL_W - PANEL_GAP   // 水母在右半屏 → 面板出左侧
+    : posX + wrapW + PANEL_GAP;    // 水母在左半屏 → 面板出右侧
+  left = Math.max(8, Math.min(left, W - PANEL_W - 8));
+  // 纵向：面板中心对齐水母中心，再夹到视口内
+  let top = posY + wrapH / 2 - PANEL_H / 2;
+  top = Math.max(8, Math.min(top, H - PANEL_H - 8));
+  host.style.left = left + 'px';
+  host.style.top  = top + 'px';
+}
+// ── 开机打招呼：三态（冷启动 / 每日首次 / 同日再次）──
+let _greeted = false;
+const _GREET_DATE_KEY = 'mochi_last_greet_date';
+const _GREET_IS_FIRST_KEY = 'mochi_ever_greeted';
+
+function renderMsgsFromData(todayMsgs){
+  const msgs = document.getElementById('chatMsgs');
+  if(!msgs) return;
+  msgs.querySelectorAll('.msg').forEach(el=>el.remove());
+  chatHistory.length = 0;
+  for(const m of todayMsgs){
+    chatHistory.push({role:m.role, content:m.content});
+    const bub = document.createElement('div');
+    bub.className = 'msg ' + (m.role==='user'?'user':'mochi');
+    bub.textContent = m.content;
+    msgs.appendChild(bub);
+  }
+  if(todayMsgs.length > 0){ _checkedIn=true; msgs.scrollTop=msgs.scrollHeight; }
+  updateCheckIn();
+}
+
+function renderCardsFromData(cards){
+  DIARY.days=[]; DIARY.weeks=[]; DIARY.months=[];
+  Object.keys(dayCards).forEach(k=>delete dayCards[k]);
+  Object.keys(weekCards).forEach(k=>delete weekCards[k]);
+  Object.keys(monthCards).forEach(k=>delete monthCards[k]);
+  for(const c of cards){
+    if(c.kind==='day'){ DIARY.days.push({date:c.date_key,emotion:c.emotion,summary:c.summary}); dayCards[c.date_key]={emotion:c.emotion,summary:c.summary}; }
+    if(c.kind==='week'){ DIARY.weeks.push({date:c.date_key,emotion:c.emotion,summary:c.summary,story:c.story,range:c.range_label}); weekCards[c.date_key]={emotion:c.emotion,label:c.range_label,summary:c.summary,story:c.story}; }
+    if(c.kind==='month'){ DIARY.months.push({date:c.date_key,emotion:c.emotion,summary:c.summary,story:c.story,period:c.period_label}); monthCards[c.date_key]={emotion:c.emotion,label:c.period_label,summary:c.summary,story:c.story}; }
+  }
+  renderList();
+  _listOriginal=[...document.getElementById('listView').children];
+  weekChartData.length=0;
+  DIARY.days.forEach(d=>weekChartData.push({label:_mmdd(d.date),v:EMO_V[d.emotion],emotion:EMO_LABEL[d.emotion],text:d.summary}));
+  buildMonthChartData();
+  drawChart(currentTab==='week'?weekChartData:monthChartData);
+  renderCal(calYear, calMonth);
+}
+
+// 首次打开面板时从 Supabase 加载历史数据
+async function initFromSupabase(){
+  const msgs = document.getElementById('chatMsgs');
+  if(!msgs) return;
+
+  const card = document.getElementById('checkInCard');
+  if(card) card.style.display = 'none';
+
+  // 加载动画：迷你水母 webm + 准备中文字
+  const _mochiLoadHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px 0 20px;">
+      <img src="../assets/mochi_avatar.webp" style="width:54px;height:54px;object-fit:cover;border-radius:50%;animation:float 6s ease-in-out infinite;opacity:.9;">
+      <span style="font-size:11.5px;color:#b0b0c8;letter-spacing:.5px;">准备中<span class="gen-dots" style="display:inline-flex;gap:3px;margin-left:3px;vertical-align:middle;"><i style="width:3px;height:3px;border-radius:50%;background:#c0c0d8;display:inline-block;animation:genDot 1.2s infinite;"></i><i style="width:3px;height:3px;border-radius:50%;background:#c0c0d8;display:inline-block;animation:genDot 1.2s .2s infinite;"></i><i style="width:3px;height:3px;border-radius:50%;background:#c0c0d8;display:inline-block;animation:genDot 1.2s .4s infinite;"></i></span></span>
+    </div>`;
+
+  const loadingBub = document.createElement('div');
+  loadingBub.id = '_sb_loading';
+  loadingBub.innerHTML = _mochiLoadHTML;
+  msgs.appendChild(loadingBub);
+
+  const listView = document.getElementById('listView');
+  const listLoading = document.createElement('div');
+  listLoading.id = '_sb_list_loading';
+  listLoading.innerHTML = _mochiLoadHTML;
+  listView.innerHTML = '';
+  listView.appendChild(listLoading);
+
+  try {
+    // 静默登录（加载动画已显示，用户无感知）
+    await ensureSignedIn();
+
+    const [todayMsgs, cards] = await Promise.all([
+      loadTodayMessages(),
+      loadEmotionCards(),
+    ]);
+
+    document.getElementById('_sb_loading')?.remove();
+    document.getElementById('_sb_list_loading')?.remove();
+
+    renderMsgsFromData(todayMsgs);
+    renderCardsFromData(cards);
+
+    if(todayMsgs.length === 0){
+      loadApiKey().then(k => { if(k) compressYesterdayMessages(k); });
+    }
+  } catch(e){
+    document.getElementById('_sb_loading')?.remove();
+    document.getElementById('_sb_list_loading')?.remove();
+    updateCheckIn();
+    console.warn('initFromSupabase error', e);
+  }
+}
+
+async function mochiGreet(){
+  const msgs = document.getElementById('chatMsgs');
+  if(!msgs) return;
+  const apiKey = await loadApiKey();
+
+  const today = new Date().toDateString();
+  const lastDate = localStorage.getItem(_GREET_DATE_KEY) || '';
+  const everGreeted = localStorage.getItem(_GREET_IS_FIRST_KEY) === '1';
+  const sameDay = (lastDate === today && everGreeted);
+
+  localStorage.setItem(_GREET_DATE_KEY, today);
+  localStorage.setItem(_GREET_IS_FIRST_KEY, '1');
+
+  // 兜底文案
+  const fallback = !everGreeted ? '你来了。' : sameDay ? '嗯，又来了。' : '今天怎么样？';
+
+  if(!apiKey){
+    const m = makeMochiMsg('');
+    m.textContent = fallback;
+    msgs.appendChild(m); msgs.scrollTop=msgs.scrollHeight;
+    return;
+  }
+
+  let greetPrompt;
+  if(!everGreeted){
+    greetPrompt = '这是用户第一次打开 Mochi，说一句极简的欢迎，比如"你来了。"，1-5个字，安静克制，不卖萌，不加感叹号。';
+  } else if(sameDay){
+    // 同日再次打开——衔接上文，像朋友回来了
+    const recentCtx = chatHistory.slice(-2).map(m=>(m.role==='user'?'用户：':'Mochi：')+m.content).join(' / ');
+    greetPrompt = `用户今天已经打开过 Mochi，刚才聊了一会儿又回来了。上文是：${recentCtx || '（暂无）'}。说一句自然衔接的话，像朋友看到他回来，简短温柔，不说"欢迎回来"，不卖萌，不加感叹号。`;
+  } else {
+    greetPrompt = '用户今天第一次打开 Mochi。用1句话轻轻发起对话，可以衔接昨天，也可以直接问今天，比如"今天怎么样？"，安静自然，不说"欢迎回来"，不卖萌，不加感叹号。';
+  }
+
+  try {
+    const text = await callAI({
+      system: `你是情绪陪伴宠物 Mochi，一只小水母。${greetPrompt}`,
+      messages: [{role:'user', content:'打招呼'}],
+      maxTokens: 60,
+    });
+    const m = makeMochiMsg('');
+    m.textContent = text || fallback;
+    msgs.appendChild(m); msgs.scrollTop=msgs.scrollHeight;
+  } catch(_){
+    const m = makeMochiMsg('');
+    m.textContent = fallback;
+    msgs.appendChild(m); msgs.scrollTop=msgs.scrollHeight;
+  }
+}
+
+function togglePanel(){
+  const host = document.getElementById('panel-host');
+  if(!host) return;
+  panelVisible = !panelVisible;
+  if(panelVisible){
+    positionPanel(host);
+    host.classList.add('show');
+    api.panelOpen();
+    // 首次打开：初始化数据；之后每次都让 Mochi 发起对话
+    if(!_greeted){
+      _greeted = true;
+      switchMainTab('chat');
+      initFromSupabase();
+      setTimeout(heartbeat, 3000);
+    }
+    if(typeof drawChart === 'function'){
+      setTimeout(() => drawChart(currentTab === 'week' ? weekChartData : monthChartData), 60);
+    }
+    setTimeout(mochiGreet, 600);
+    // 软送达
+    setTimeout(() => { if(postcardPending){ postcardPending=false; deliverPostcard(); } else { notifyPostcardReady(); } }, 650);
+  } else {
+    host.classList.remove('show');
+    api.panelClose();
+  }
+}
+
+// ── 鼠标进出水母 → 穿透控制 ──
+wrap.addEventListener('mouseenter', () => { api.mouseEnterJelly(); });
+wrap.addEventListener('mouseleave', () => {
+  if(!panelVisible) api.mouseLeaveJelly();
+});
+
+// ── 拖拽 ──
+const drag = {
+  active:false, moved:false,
+  sx:0, sy:0, ox:0, oy:0, tx:0, ty:0, rafId:null,
+  panelOX:0, panelOY:0   // 拖动开始时面板相对水母的偏移（面板联动用）
+};
+
+function dragTick(){
+  if(!drag.active) return;
+  posX += (drag.tx - posX) * 0.17;
+  posY += (drag.ty - posY) * 0.17;
+  wrap.style.left = posX + 'px';
+  wrap.style.top  = posY + 'px';
+  // 面板联动：跟着水母移动，保持相对位置
+  if(panelVisible){
+    const host = document.getElementById('panel-host');
+    if(host){ host.style.left = (posX + drag.panelOX) + 'px'; host.style.top = (posY + drag.panelOY) + 'px'; }
+  }
+  drag.rafId = requestAnimationFrame(dragTick);
+}
+
+wrap.addEventListener('mousedown', onDown);
+document.addEventListener('mousemove', onMove);
+document.addEventListener('mouseup', onUp);
+
+function onDown(e){
+  if(e.button !== 0) return;
+  e.preventDefault();
+  drag.active=true; drag.moved=false;
+  drag.sx=e.clientX; drag.sy=e.clientY;
+  drag.ox=posX; drag.oy=posY;
+  drag.tx=posX; drag.ty=posY;
+  // 记录面板相对水母的偏移，拖动时保持
+  if(panelVisible){
+    const host=document.getElementById('panel-host');
+    if(host){ drag.panelOX=host.offsetLeft-posX; drag.panelOY=host.offsetTop-posY; }
+  }
+  wrap.classList.add('pressing');
+  drag.rafId = requestAnimationFrame(dragTick);
+}
+function onMove(e){
+  mouseX=e.clientX; mouseY=e.clientY;
+  if(!drag.active) return;
+  const dx=e.clientX-drag.sx, dy=e.clientY-drag.sy;
+  if(!drag.moved && (Math.abs(dx)>6||Math.abs(dy)>6)){
+    drag.moved=true;
+    wrap.classList.remove('pressing');
+    wrap.classList.add('dragging');
+    wrap.style.transition='none';
+  }
+  if(drag.moved){ drag.tx=drag.ox+dx; drag.ty=drag.oy+dy; }
+}
+function onUp(){
+  if(!drag.active) return;
+  cancelAnimationFrame(drag.rafId);
+  drag.active=false;
+  wrap.classList.remove('pressing','dragging');
+  if(drag.moved) endDrag();
+  else { recordInteraction(); togglePanel(); }  // 点击水母 = 开关面板
+}
+function endDrag(){
+  // 贴边吸附：松手后吸到最近的一条边，不做二次拖边隐藏
+  const W=window.innerWidth, H=window.innerHeight;
+  // 用「松手那一刻的真实落点」(drag.tx/ty) 计算，而不是带缓动滞后的 posX，
+  // 否则快速拖动时落点和实际位置对不上，会吸错边甚至吸不到。
+  let nx=Math.max(0, Math.min(drag.tx, W-wrapW));
+  let ny=Math.max(0, Math.min(drag.ty, H-wrapH));
+  // 水母素材在 230px 容器里有留白，吸边时让它略探出边缘，更贴
+  const OUT = wrapW * 0.22;
+  const dL = nx, dR = W-(nx+wrapW), dT = ny, dB = H-(ny+wrapH);
+  const m = Math.min(dL, dR, dT, dB);
+  if(m === dL)      nx = -OUT;
+  else if(m === dR) nx = W - wrapW + OUT;
+  else if(m === dT) ny = -OUT;
+  else              ny = H - wrapH + OUT;
+  animateTo(nx, ny, 0.55);
+  recordInteraction();
+}
+
+// ── 眼球追踪 ──
+let mouseX=0, mouseY=0;
+
+// 动态穿透：鼠标在水母或面板范围内→可点击；出去→穿透，让背后窗口正常响应
+let _lastHit = null;
+function updatePassthrough(cx, cy){
+  if(!IS_ELECTRON) return;
+  // 检查是否在水母范围内
+  const inJelly = cx>=posX && cx<=posX+wrapW && cy>=posY && cy<=posY+wrapH;
+  // 检查是否在面板范围内
+  let inPanel = false;
+  if(panelVisible){
+    const host = document.getElementById('panel-host');
+    if(host){
+      const r = host.getBoundingClientRect();
+      inPanel = cx>=r.left && cx<=r.right && cy>=r.top && cy<=r.bottom;
+    }
+  }
+  const hit = inJelly || inPanel;
+  if(hit !== _lastHit){
+    _lastHit = hit;
+    if(hit) api.hitInteractive();
+    else api.hitPassthrough();
+  }
+}
+
+document.addEventListener('mousemove', e=>{ mouseX=e.clientX; mouseY=e.clientY; updatePassthrough(e.clientX, e.clientY); });
+if(IS_ELECTRON) api.onCursorPos((x,y)=>{ mouseX=x; mouseY=y; });
+
+function eyeTrackTick(){
+  const cx=posX+wrapW/2, cy=posY+wrapH*0.41;
+  const dx=mouseX-cx, dy=mouseY-cy;
+  const dist=Math.sqrt(dx*dx+dy*dy);
+  if(dist>0 && dist<500){
+    const str=Math.max(0,1-dist/500);
+    const near=Math.min(1, dist/24); // 正中心缓冲区：越近移动越小，到中心稳住不抖
+    const ox=(dx/dist)*6*str*near, oy=(dy/dist)*6*str*near;
+    eyesEl.style.transform=`translateX(calc(-50% + ${ox.toFixed(2)}px)) translateY(${oy.toFixed(2)}px)`;
+  } else {
+    eyesEl.style.transform='translateX(-50%)';
+  }
+}
+setInterval(eyeTrackTick, 32);
+
+// ── 初始化 ──
+initPosition();
+refreshPresence();
+
+// ── 出场动画：水母旋转游入 ──
+const greetingEl = document.getElementById('jelly-greeting');
+setTimeout(()=>{
+  wrap.classList.add('visible');
+  // 出场气泡：跟随水母位置，在右上方
+  function positionGreeting(){
+    greetingEl.style.visibility = 'hidden';
+    greetingEl.style.left = '0px';
+    // 先放到视口外量宽度，再定位
+    requestAnimationFrame(()=>{
+      const bw = greetingEl.offsetWidth || 80;
+      const W = window.innerWidth;
+      let left = posX + wrapW - 20;
+      // 右边超出则向左移
+      if(left + bw + 12 > W) left = W - bw - 12;
+      if(left < 8) left = 8;
+      greetingEl.style.left = left + 'px';
+      greetingEl.style.top  = (posY - 10) + 'px';
+      greetingEl.style.visibility = '';
+    });
+  }
+  setTimeout(()=>{
+    positionGreeting();
+    greetingEl.textContent = '你来了。';
+    greetingEl.classList.add('show');
+    // 3秒后气泡消失
+    setTimeout(()=>{
+      greetingEl.classList.remove('show');
+    }, 3000);
+  }, 800); // 等水母落定再冒泡
+}, 200);
+
+// ── 预览模式：不在 Electron 里时（浏览器/右侧预览），给浅底 + 自动展开面板，方便直接看效果 ──
+if(!IS_ELECTRON){
+  document.body.classList.add('preview');
+  setTimeout(() => { if(!panelVisible) togglePanel(); }, 200);
+}
+
+// ── 拖拽倾斜物理：拖动时朝移动方向轻微倾斜，松手回正 ──
+const rotWrapEl = document.getElementById('rot-wrap');
+let rotRefX = posX + 115, rotRefY = posY + 115;
+const ROT_REF_RATE = 0.015;
+let rotAngle = 0, rotVel = 0, rotLastWritten = 0;
+const ROT_K = 0.020, ROT_D = 0.88;
+const ROT_MAX_TILT = 6;
+let rotPrevDx = 0, rotPrevDy = 0;
+
+function rotShortDiff(from, to){
+  let d = to - from;
+  while(d >  180) d -= 360;
+  while(d < -180) d += 360;
+  return d;
+}
+wrap.addEventListener('mousedown', () => {
+  rotRefX = posX + 115; rotRefY = posY + 115;
+  rotPrevDx = 0; rotPrevDy = 0;
+}, true);
+
+(function rotLoop(){
+  const cx = posX + 115, cy = posY + 115;
+  let targetRot;
+
+  if(drag.active && drag.moved){
+    rotRefX += (cx - rotRefX) * ROT_REF_RATE;
+    rotRefY += (cy - rotRefY) * ROT_REF_RATE;
+    const dx = cx - rotRefX, dy = cy - rotRefY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist > 10){
+      const fullAngle = Math.atan2(dx, -dy) * 180 / Math.PI;
+      const raw = rotShortDiff(0, fullAngle);
+      const clamped = Math.max(-ROT_MAX_TILT, Math.min(ROT_MAX_TILT, raw));
+      targetRot = rotAngle + rotShortDiff(rotAngle, clamped);
+      rotPrevDx = dx; rotPrevDy = dy;
+    } else {
+      targetRot = rotAngle;
+    }
+  } else {
+    rotRefX += (cx - rotRefX) * 0.08;
+    rotRefY += (cy - rotRefY) * 0.08;
+    if(!drag.active){ rotPrevDx = 0; rotPrevDy = 0; }
+    targetRot = 0;
+  }
+
+  const diff = rotShortDiff(rotAngle, targetRot);
+  rotVel += diff * ROT_K;
+  rotVel *= ROT_D;
+  rotAngle += rotVel;
+  // 静止时不再每帧重写 transform，避免无谓的全屏重绘
+  if(!drag.active && Math.abs(rotVel) < 0.01 && Math.abs(rotAngle) < 0.05){
+    rotAngle = 0; rotVel = 0;
+  }
+  if(Math.abs(rotAngle - rotLastWritten) >= 0.03){
+    rotWrapEl.style.transform = rotAngle === 0 ? '' : `rotate(${rotAngle.toFixed(2)}deg)`;
+    rotLastWritten = rotAngle;
+  }
+  requestAnimationFrame(rotLoop);
+})();
+
+/* ════════════════════════════════════════════════
+   面板逻辑（嵌自 diary-tab-v5，数据为假数据）
+════════════════════════════════════════════════ */
+const EMO_LABEL = {calm:'平静',happy:'开心',anxious:'焦虑',low:'低落'};
+const EMO_COLOR = {calm:'#2a9868',happy:'#c08808',anxious:'#c83050',low:'#5858b8'};
+const EMO_V     = {happy:2, calm:1, low:-1, anxious:-2};   // 情绪 → 走势图纵轴
+// 全局统一一套语义色：走势图圆点直接复用 EMO_COLOR（卡片/日历/标签同源），不再各用各的
+const emoC={开心:EMO_COLOR.happy,平静:EMO_COLOR.calm,低落:EMO_COLOR.low,焦虑:EMO_COLOR.anxious,'—':'#ddd'};
+
+/* ── 单一假数据源：列表 / 日历 / 走势图 全部由它派生，保证三处永远一致 ── */
+const DIARY = {
+  days: [],
+  weeks: [],
+  months: [],
+};
+
+/* 派生①：日历用的 key → 卡片 映射 */
+const dayCards={}, weekCards={}, monthCards={};
+DIARY.days.forEach(d=>dayCards[d.date]   = d.mochi ? {emotion:d.emotion,summary:d.summary,mochi:d.mochi} : {emotion:d.emotion,summary:d.summary});
+DIARY.weeks.forEach(w=>weekCards[w.date] = {emotion:w.emotion,label:w.range,summary:w.summary,story:w.story});
+DIARY.months.forEach(m=>monthCards[m.date]={emotion:m.emotion,label:m.period,summary:m.summary,story:m.story});
+
+/* 派生②：走势图数据（周 = 按天，月 = 按月；颜色与数值都来自同源情绪） */
+function _mmdd(k){return parseInt(k.slice(4,6))+'/'+parseInt(k.slice(6,8));}
+const weekChartData  = DIARY.days.map(d=>({label:_mmdd(d.date), v:EMO_V[d.emotion], emotion:EMO_LABEL[d.emotion], text:d.summary}));
+// 月走势用日卡（每天一点），初始为空，initFromSupabase 后通过 buildMonthChartData() 填充
+const monthChartData = [];
+let currentTab='week';
+// 月走势用日卡（每天一点），而非月卡
+function buildMonthChartData(){
+  monthChartData.length=0;
+  DIARY.days.forEach(d=>monthChartData.push({
+    label: parseInt(d.date.slice(6,8))+'日',
+    v: EMO_V[d.emotion],
+    emotion: EMO_LABEL[d.emotion],
+    text: d.summary,
+  }));
+}
+
+/* 派生③：日记列表（按时间倒序 + 按月分组，由同源生成，不再写死 HTML） */
+const _WD=['日','一','二','三','四','五','六'];
+function _fmtDay(k){const y=+k.slice(0,4),mo=+k.slice(4,6),d=+k.slice(6,8);return mo+'月'+d+'日·周'+_WD[new Date(y,mo-1,d).getDay()];}
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function renderList(){
+  const list=document.getElementById('listView');
+  const items=[];
+  DIARY.months.forEach(m=>items.push({kind:'month',...m}));
+  DIARY.weeks.forEach(w=>items.push({kind:'week',...w}));
+  DIARY.days.forEach(d=>items.push({kind:'day',...d}));
+  items.sort((a,b)=>parseInt(b.date)-parseInt(a.date));
+
+  if(items.length===0){
+    list.innerHTML='<div style="text-align:center;padding:48px 24px;color:#b0b0c8;font-size:13px;line-height:2;">🪼<br>还没有情绪日记<br>跟 Mochi 聊聊，点 ✦ 生成今日日记</div>';
+    return;
+  }
+
+  let html='', curMonth='';
+  items.forEach(it=>{
+    const mLabel=MONTH_NAMES[parseInt(it.date.slice(4,6))-1];
+    if(mLabel!==curMonth){ html+=`<div class="m-div"${curMonth?' style="margin-top:6px;"':''}><div class="m-txt">${mLabel}</div><div class="m-ln"></div></div>`; curMonth=mLabel; }
+    const cn=EMO_LABEL[it.emotion];
+    if(it.kind==='day'){
+      const mq=it.mochi?`<div class="mochi-q"><span>🪼</span><div class="mochi-q-t">${_esc(it.mochi)}</div></div>`:'';
+      html+=`<div class="card day-card ${it.emotion} open" data-ts="${it.date}" onclick="this.classList.toggle('open')"><div class="card-head"><div class="day-date">${_fmtDay(it.date)}</div><div class="e-tag">${cn}</div></div><div class="card-body">${_esc(it.summary)}${mq}</div></div>`;
+    } else if(it.kind==='week'){
+      const st=it.story?`<div class="c-story">${_esc(it.story)}</div>`:'';
+      html+=`<div class="card week-card ${it.emotion} open" data-ts="${it.date}" onclick="this.classList.toggle('open')"><div class="card-head"><div class="w-badge">周</div><div class="w-range">${it.range}</div><div class="e-tag">${cn}</div></div><div class="card-body"><div>${_esc(it.summary)}</div>${st}</div></div>`;
+    } else {
+      const st=it.story?`<div class="c-story">${_esc(it.story)}</div>`:'';
+      html+=`<div class="card month-card ${it.emotion} open" data-ts="${it.date}" onclick="this.classList.toggle('open')"><div class="card-head"><div class="mo-badge">月</div><div class="mo-period">${it.period}</div><div class="e-tag">${cn}</div></div><div class="card-body"><div class="mo-summary">${_esc(it.summary)}</div>${st}</div></div>`;
+    }
+  });
+  list.innerHTML=html;
+}
+
+// 上留 padTop 给「开心」标签，下留 padBottom 给日期标签，绘图区只占中间，避免文字互相遮挡
+function valToY(v,H,padTop,padBottom){return padTop+(1-(v+2)/4)*(H-padTop-padBottom);}
+function drawChart(data){
+  const cvs=document.getElementById('chart');
+  const W=cvs.offsetWidth||280, H=96, padTop=12, padBottom=22, px=38;
+  cvs.width=W*devicePixelRatio; cvs.height=H*devicePixelRatio;
+  const ctx=cvs.getContext('2d'); ctx.scale(devicePixelRatio,devicePixelRatio);
+  const n=data.length;
+  if(n===0) return;
+  // 只有一个点时单独处理，不做连线
+  const xs = n===1 ? [W/2] : data.map((_,i)=>px+i*(W-px*1.3)/(n-1));
+  const ys=data.map(d=>valToY(d.v,H,padTop,padBottom));
+
+  // Figma 风格：无网格线；左侧标签前各带一个小情绪图例点
+  [['开心',2,EMO_COLOR.happy],['平静',1,EMO_COLOR.calm],['低落',-1,EMO_COLOR.low],['焦虑',-2,EMO_COLOR.anxious]].forEach(([l,v,c])=>{
+    const y=valToY(v,H,padTop,padBottom);
+    ctx.beginPath(); ctx.arc(px-30, y, 2.2, 0, Math.PI*2); ctx.fillStyle=c; ctx.fill();   // 图例点
+    ctx.font='500 9.5px "PingFang SC",system-ui';
+    ctx.fillStyle='#9090b8'; ctx.textAlign='left';
+    ctx.fillText(l, px-24, y+3);
+  });
+
+  const baseY=H-padBottom;
+  // 平滑曲线（中点贝塞尔，无抖动）
+  const curveTo=()=>{ for(let i=1;i<n;i++){ const mx=(xs[i-1]+xs[i])/2; ctx.bezierCurveTo(mx,ys[i-1],mx,ys[i],xs[i],ys[i]); } };
+  // 极淡区域填充
+  const g=ctx.createLinearGradient(0,padTop,0,baseY);
+  g.addColorStop(0,'rgba(120,110,190,.07)'); g.addColorStop(1,'rgba(120,110,190,0)');
+  ctx.fillStyle=g;
+  ctx.beginPath(); ctx.moveTo(xs[0],baseY); ctx.lineTo(xs[0],ys[0]); curveTo(); ctx.lineTo(xs[n-1],baseY); ctx.closePath(); ctx.fill();
+  // 细淡平滑主线
+  ctx.beginPath(); ctx.moveTo(xs[0],ys[0]); curveTo();
+  ctx.strokeStyle='rgba(120,110,190,.65)'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.stroke();
+
+  // 空心圆点（白心 + 彩色圈）
+  data.forEach((d,i)=>{
+    ctx.beginPath();ctx.arc(xs[i],ys[i],4,0,Math.PI*2);
+    ctx.fillStyle='#fff'; ctx.fill();
+    ctx.strokeStyle=d.v===0?'#ccc':emoC[d.emotion]||'#aaa'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#b0b0c8'; ctx.font='9px "PingFang SC",system-ui'; ctx.textAlign='center';
+    ctx.fillText(d.label,xs[i],H-7);
+  });
+  cvs._data=data; cvs._xs=xs; cvs._ys=ys;
+}
+
+const ctip=document.getElementById('ctip');
+document.getElementById('chart').addEventListener('mousemove',function(e){
+  if(!this._data) return;
+  const r=this.getBoundingClientRect(), scale=this.offsetWidth/this.width*devicePixelRatio;
+  const mx=(e.clientX-r.left), my=(e.clientY-r.top);
+  let best=null,bestD=Infinity;
+  this._xs.forEach((x,i)=>{const d=Math.hypot(mx-x*scale,my-this._ys[i]*scale);if(d<bestD){bestD=d;best=i;}});
+  if(bestD>14){ctip.style.display='none';return;}
+  const d=this._data[best];
+  document.getElementById('ctd').textContent=d.label+' · '+d.emotion;
+  document.getElementById('ctt').textContent=d.text;
+  const s=document.getElementById('cts');
+  if(d.story){s.textContent=d.story;s.style.display='block';}else s.style.display='none';
+  ctip.style.display='block';
+  ctip.style.left=Math.min(e.clientX+14,innerWidth-185)+'px';
+  ctip.style.top=Math.max(e.clientY-65,8)+'px';
+});
+document.getElementById('chart').addEventListener('mouseleave',()=>ctip.style.display='none');
+
+function setTab(t){
+  currentTab=t;
+  document.getElementById('tabW').classList.toggle('on',t==='week');
+  document.getElementById('tabM').classList.toggle('on',t==='month');
+  drawChart(t==='week'?weekChartData:monthChartData);
+}
+
+let sorted=false;
+let _listOriginal=[]; // 记住原始分组顺序（renderList 后填充）
+function toggleSort(){
+  sorted=!sorted;
+  const btn=document.getElementById('sortBtn');
+  btn.textContent=sorted?'⇅ 分组':'⇅ 时间线';
+  btn.classList.toggle('on',sorted);
+  const list=document.getElementById('listView');
+  if(sorted){
+    // 纯时间线：隐藏月份分隔，全部按时间倒序
+    list.querySelectorAll('.m-div').forEach(d=>d.style.display='none');
+    [...list.querySelectorAll('.card')]
+      .sort((a,b)=>parseInt(b.dataset.ts)-parseInt(a.dataset.ts))
+      .forEach(c=>list.appendChild(c));
+  } else {
+    // 还原最初的「按月分组」顺序
+    list.querySelectorAll('.m-div').forEach(d=>d.style.display='');
+    _listOriginal.forEach(el=>list.appendChild(el));
+  }
+}
+
+let calMode=false;
+function setView(v){
+  calMode=(v==='cal');
+  document.getElementById('listView').style.display = calMode ? 'none' : 'flex';
+  document.getElementById('sortBtn').style.display  = calMode ? 'none' : '';
+  document.getElementById('calView').classList.toggle('active', calMode);
+  document.getElementById('vsL').classList.toggle('on', !calMode);
+  document.getElementById('vsC').classList.toggle('on',  calMode);
+  if(calMode) renderCal(calYear, calMonth);
+  closePopup();
+}
+
+const MONTH_NAMES=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+const _now=new Date(); let calYear=_now.getFullYear(),calMonth=_now.getMonth(),openKey=null;
+
+function calNav(dir){
+  calMonth+=dir;
+  if(calMonth>11){calMonth=0;calYear++;}
+  if(calMonth<0){calMonth=11;calYear--;}
+  renderCal(calYear,calMonth); closePopup();
+}
+
+function renderCal(yr,mo){
+  calYear=yr; calMonth=mo;
+  document.getElementById('calLbl').textContent=MONTH_NAMES[mo]+' '+yr;
+  const grid=document.getElementById('calGrid');
+  grid.innerHTML='';
+  const today=new Date();
+  const lastDay=new Date(yr,mo+1,0).getDate();
+  const firstDow=(new Date(yr,mo,1).getDay()+6)%7;
+  const prevLast=new Date(yr,mo,0).getDate();
+
+  // 月卡：date_key 格式是 YYYYMM00
+  const monthKey=`${yr}${String(mo+1).padStart(2,'0')}00`;
+  const curMonthCard = monthCards[monthKey] || null;
+
+  // 周卡：date_key 是周一日期，需按范围匹配
+  function getWeekCard(d){
+    for(const [wKey, wc] of Object.entries(weekCards)){
+      if(wKey.length!==8) continue;
+      const monday = new Date(+wKey.slice(0,4), +wKey.slice(4,6)-1, +wKey.slice(6,8));
+      const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
+      const day = new Date(yr, mo, d);
+      if(day>=monday && day<=sunday) return wc;
+    }
+    return null;
+  }
+
+  for(let i=0;i<firstDow;i++){
+    grid.appendChild(makeItem(prevLast-firstDow+1+i,'other-month',null,null,null));
+  }
+
+  for(let d=1;d<=lastDay;d++){
+    const key=`${yr}${String(mo+1).padStart(2,'0')}${String(d).padStart(2,'0')}`;
+    const dc=dayCards[key];
+    const wc=null;
+    const mc=null;
+    const isToday=today.getFullYear()===yr&&today.getMonth()===mo&&today.getDate()===d;
+    const isPast=(new Date(yr,mo,d))<=today;
+
+    let cellClass;
+    if(dc) cellClass=dc.emotion;
+    else if(isPast) cellClass='no-record';
+    else cellClass='future';
+
+    const item=makeItem(d, cellClass+(isToday?' today':''), key, wc, mc);
+    if(isToday) item.classList.add('today-item');
+    grid.appendChild(item);
+  }
+
+  const total=firstDow+lastDay;
+  const remainder=total%7===0?0:7-(total%7);
+  for(let i=1;i<=remainder;i++){
+    grid.appendChild(makeItem(i,'other-month',null,null,null));
+  }
+}
+
+function makeItem(day, cellClass, key, wc, mc){
+  const item=document.createElement('div');
+  item.className='day-item';
+
+  const cell=document.createElement('div');
+  cell.className='cal-cell '+cellClass;
+
+  if(mc || wc){
+    const bk=document.createElement('div');
+    bk.className='cell-book';
+    bk.innerHTML=`<span class="book-icon">📖</span><span class="book-lbl">${mc?'月':'周'}</span>`;
+    cell.appendChild(bk);
+  } else {
+    const mark=document.createElement('div');
+    mark.className='cell-mark';
+    cell.appendChild(mark);
+  }
+
+  const hasData = key && (dayCards[key]||wc||mc);
+  if(hasData){
+    let hoverTimer;
+    cell.addEventListener('mouseenter', ()=>{
+      clearTimeout(popupLeaveTimer);
+      hoverTimer=setTimeout(()=>showPopup(cell, key, dayCards[key], wc, mc), 100);
+    });
+    cell.addEventListener('mouseleave', ()=>{
+      clearTimeout(hoverTimer);
+      popupLeaveTimer=setTimeout(closePopup, 200);
+    });
+  }
+
+  item.appendChild(cell);
+  const num=document.createElement('div');
+  num.className='cell-date'; num.textContent=day;
+  item.appendChild(num);
+  return item;
+}
+
+function showPopup(cellEl, key, dc, wc, mc){
+  const popup=document.getElementById('calPopup');
+  const inner=document.getElementById('popupInner');
+  inner.innerHTML='';
+
+  const cards=[];
+  if(dc)  cards.push({type:'日',data:dc});
+  if(wc)  cards.push({type:'周',data:wc});
+  if(mc)  cards.push({type:'月',data:mc});
+  if(!cards.length){closePopup();return;}
+
+  cards.forEach(({type,data})=>{
+    const c=document.createElement('div');
+    c.className='popup-card';
+    const em=EMO_LABEL[data.emotion]||'';
+    const col=EMO_COLOR[data.emotion]||'#888';
+    c.innerHTML=`<div class="pc-type">${type}卡</div><span class="pc-tag" style="color:${col}">${em}</span><div class="pc-text">${data.summary||data.label||''}</div>`
+      +(data.story?`<div class="pc-story">${data.story}</div>`:'')+
+      (data.mochi?`<div class="pc-mochi"><span>🪼</span><div class="pc-mochi-t">${data.mochi}</div></div>`:'');
+    inner.appendChild(c);
+  });
+
+  popup.style.display='block';
+
+  const cr=cellEl.getBoundingClientRect();
+  const pwd=popup.offsetWidth||200;
+  const ph=popup.offsetHeight||120;
+  let left=cr.right+8;
+  if(left+pwd>innerWidth-12) left=cr.left-pwd-8;
+  let top=cr.top-8;
+  if(top+ph>innerHeight-12) top=innerHeight-ph-12;
+  if(top<8) top=8;
+  popup.style.left=Math.max(8,left)+'px';
+  popup.style.top=top+'px';
+}
+
+function closePopup(){ openKey=null; document.getElementById('calPopup').style.display='none'; }
+
+let popupLeaveTimer;
+document.getElementById('calPopup').addEventListener('mouseenter',()=>clearTimeout(popupLeaveTimer));
+document.getElementById('calPopup').addEventListener('mouseleave',()=>{ popupLeaveTimer=setTimeout(closePopup,200); });
+
+/* ── RESIZE ── */
+const pw=document.getElementById('pw'), panelEl=document.getElementById('panel');
+const DW=320,DH=640;
+document.querySelectorAll('.rh').forEach(h=>{ h.remove(); });
+function resetSize(){ /* 已移除拉伸功能 */ }
+
+/* ── 面板 header 拖拽移动 ── */
+(()=>{
+  const header = document.querySelector('.panel-header');
+  const host = document.getElementById('panel-host');
+  if(!header || !host) return;
+  let dragging=false, sx=0, sy=0, ox=0, oy=0;
+  header.addEventListener('mousedown', e=>{
+    // 点到按钮时不触发拖拽
+    if(e.target.closest('.hbtn,.avatar')) return;
+    e.preventDefault();
+    dragging=true;
+    sx=e.clientX; sy=e.clientY;
+    ox=host.offsetLeft; oy=host.offsetTop;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  function onMove(e){
+    if(!dragging) return;
+    const dx=e.clientX-sx, dy=e.clientY-sy;
+    const W=window.innerWidth, H=window.innerHeight;
+    const pw2=host.offsetWidth, ph2=host.offsetHeight;
+    host.style.left = Math.max(8,Math.min(ox+dx, W-pw2-8))+'px';
+    host.style.top  = Math.max(8,Math.min(oy+dy, H-ph2-8))+'px';
+  }
+  function onUp(){ dragging=false; document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); }
+})();
+
+/* ── 一键收起：折叠成只剩标题栏，再点展开 ── */
+let minimized=false, _savedH=DH;
+function toggleMinimize(){
+  minimized=!minimized;
+  const btn=document.getElementById('miniBtn');
+  if(minimized){
+    _savedH=panelEl.offsetHeight;            // 记住当前高度，展开时还原
+    panelEl.classList.add('mini');
+    btn.textContent='▴';
+  } else {
+    panelEl.classList.remove('mini');
+    panelEl.style.height=_savedH+'px';
+    btn.textContent='▾';
+    setTimeout(()=>drawChart(currentTab==='week'?weekChartData:monthChartData),50);
+  }
+}
+
+/* ── 设置视图（顶栏 ⚙ = 开关：再点一次返回上一个页面）── */
+let settingsOpen=false, lastMainTab='chat';
+function openSettings(){
+  if(settingsOpen){ switchMainTab(lastMainTab); return; }
+  settingsOpen=true;
+  // 读回已保存的设置
+  const provider = localStorage.getItem('mochi_api_provider') || 'quickrouter';
+  document.getElementById('apiProviderSelect').value = provider;
+  document.getElementById('apiBaseField').style.display = provider==='openai' ? '' : 'none';
+  document.getElementById('apiBaseInput').value = localStorage.getItem('mochi_api_base') || '';
+  document.getElementById('apiKeyInput').value = localStorage.getItem('mochi_api_key') || '';
+  loadApiKey().then(k=>{ if(k) document.getElementById('apiKeyInput').value=k; });
+  document.getElementById('trendStrip').style.display='none';
+  document.getElementById('toolbar').style.display='none';
+  document.getElementById('listView').style.display='none';
+  document.getElementById('calView').classList.remove('active');
+  document.getElementById('chatView').style.display='none';
+  document.getElementById('settingsView').style.display='flex';
+  document.getElementById('gearBtn').classList.add('on');
+  document.getElementById('gearBtn').title='返回';
+  closePopup();
+}
+async function saveSettings(){
+  const provider = document.getElementById('apiProviderSelect').value;
+  const base = document.getElementById('apiBaseInput').value.trim();
+  const key = document.getElementById('apiKeyInput').value.trim();
+  localStorage.setItem('mochi_api_provider', provider);
+  if(base) localStorage.setItem('mochi_api_base', base);
+  await saveApiKey(key);
+  const s=document.getElementById('setSaved'); s.style.display='block';
+  setTimeout(()=>s.style.display='none', 1800);
+}
+// provider 切换时显示/隐藏 base URL 输入框
+document.addEventListener('DOMContentLoaded', ()=>{
+  const sel = document.getElementById('apiProviderSelect');
+  if(sel) sel.addEventListener('change', ()=>{
+    document.getElementById('apiBaseField').style.display = sel.value==='openai' ? '' : 'none';
+  });
+});
+
+/* ── MAIN TAB（聊天 / 日记）── */
+function switchMainTab(t){
+  lastMainTab=t;
+  // 离开设置视图
+  settingsOpen=false;
+  document.getElementById('settingsView').style.display='none';
+  document.getElementById('gearBtn').classList.remove('on');
+  document.getElementById('gearBtn').title='设置';
+  const isDiary = t==='diary';
+  document.getElementById('tabChat').classList.toggle('on',!isDiary);
+  document.getElementById('tabDiary').classList.toggle('on',isDiary);
+  document.getElementById('chatView').style.display = isDiary?'none':'flex';
+  const show = v => v ? '' : 'none';
+  document.getElementById('trendStrip').style.display = show(isDiary);
+  document.getElementById('toolbar').style.display    = show(isDiary);
+  document.getElementById('listView').style.display    = show(isDiary && !calMode);
+  document.getElementById('calView').classList.toggle('active', isDiary && calMode);
+  document.getElementById('sortBtn').style.display     = show(isDiary && !calMode);
+  if(isDiary){
+    drawChart(currentTab==='week'?weekChartData:monthChartData);
+    clearDiaryUnread();
+    // 切到日记时从 Supabase 静默刷新数据
+    loadEmotionCards().then(cards=>{
+      // 只有 Supabase 数据比本地多（或一样多）时才覆盖，避免写入竞争时被旧数据盖掉
+      const localTotal = DIARY.days.length + DIARY.weeks.length + DIARY.months.length;
+      if(cards && cards.length >= localTotal) renderCardsFromData(cards);
+    });
+  }
+  else { updateCheckIn(); }
+  closePopup();
+}
+
+/* ── 日记未读小红点 ── */
+function markDiaryUnread(){
+  const t=document.getElementById('tabDiary');
+  if(!t.querySelector('.unread')){
+    const dot=document.createElement('span'); dot.className='unread'; t.appendChild(dot);
+  }
+}
+function clearDiaryUnread(){
+  const d=document.getElementById('tabDiary').querySelector('.unread');
+  if(d) d.remove();
+  // 进日记即视为「读过」明信片：去掉置顶卡的呼吸高亮与小红点（卡片仍留在置顶）
+  const pp=document.querySelector('.pinned-postcard');
+  if(pp){ pp.classList.remove('unread'); const dot=pp.querySelector('.pp-dot'); if(dot) dot.remove(); }
+  // 看过日记也算「翻篇」→ 持久化，跨会话不再往聊天里推（与"推过一次"任一即可）
+  if(typeof _pcMarkSeen==='function'){ const w=DIARY.weeks[DIARY.weeks.length-1]; _pcMarkSeen(_pcId(w)); }
+}
+
+/* ── 周/月明信片「软送达」── 设计：周日/月底后端定时生成 → 不弹窗打扰 →
+   · 用户面板没开：标记待送，下次打开面板时软软出现在聊天里 + 日记置顶 + 未读红点；
+   · 用户一直开着聊天窗口：直接在当前窗口推送，不必等下次打开。
+   空壳无真定时器：用「首次打开面板」模拟「后端已就绪」来调 notifyPostcardReady()；
+   接后端后由 周日22:00/月底23:00 定时任务调同一个 notifyPostcardReady()。 */
+let postcardDelivered=false;   // 本会话已送达，避免重复
+let postcardPending=false;     // 后端已生成、面板当时关着，等待下次打开软送达
+/* 「已读/已送达」持久化：推过一次聊天 或 点进日记看过，任一即「翻篇」→ 跨会话永不再推。
+   空壳用 localStorage 存（按明信片 id），接 Supabase 后换成云端字段、跨设备同步。 */
+function _pcId(w){ return 'pc:'+w.range; }            // 明信片稳定 id（用周期范围）
+function _pcSeen(){ try{ return JSON.parse(localStorage.getItem('mochi_pc_seen')||'[]'); }catch(e){ return []; } }
+function _pcIsSeen(id){ return _pcSeen().includes(id); }
+function _pcMarkSeen(id){ try{ const s=_pcSeen(); if(!s.includes(id)){ s.push(id); localStorage.setItem('mochi_pc_seen', JSON.stringify(s)); } }catch(e){} }
+// 后端定时生成完成后调用这一个入口即可（其余分发逻辑都在里面）
+function notifyPostcardReady(){
+  const w=DIARY.weeks[DIARY.weeks.length-1];
+  if(postcardDelivered || _pcIsSeen(_pcId(w))) return;   // 本会话推过、或历史已读 → 不再推
+  if(panelVisible){ deliverPostcard(); }   // 用户正开着 → 直接推进当前窗口
+  else { postcardPending=true; }           // 面板关着 → 排队，下次打开再软送
+}
+function deliverPostcard(){
+  const w=DIARY.weeks[DIARY.weeks.length-1];      // 最近一张周卡
+  if(postcardDelivered || _pcIsSeen(_pcId(w))) return;
+  postcardDelivered=true;
+  _pcMarkSeen(_pcId(w));                           // 推进聊天即算「已送达·翻篇」，永久不再重复推
+  const emo=EMO_LABEL[w.emotion], col=EMO_COLOR[w.emotion];
+  // 1) 软推进聊天：明信片（不抢镜，不弹窗）
+  const msgs=document.getElementById('chatMsgs');
+  if(msgs){
+    const pc=document.createElement('div');
+    pc.className='chat-card postcard reveal';
+    // 周=「情绪周记」；月卡接入后标题用 `${月}月情绪日记`（📮 仅是"明信片送达"的形式徽标）
+    pc.innerHTML='<div class="cc-glow"></div>'+
+      '<span class="cc-ribbon">📮 情绪周记</span>'+
+      `<div class="cc-head"><span class="cc-emo" style="color:${col}">${emo}</span><span class="cc-date">${w.range}</span></div>`+
+      `<div class="cc-text">${_esc(w.summary)}</div>`+
+      (w.story?`<div class="cc-mochi">${_esc(w.story)}</div>`:'');
+    msgs.appendChild(pc);
+    makeExpandable(pc.querySelector('.cc-mochi'));   // 长叙事超高才折叠 + 展开
+  }
+  // 2) 日记置顶 + 未读
+  pinPostcard(w, emo, col);
+  markDiaryUnread();
+}
+function pinPostcard(w, emo, col){
+  const list=document.getElementById('listView');
+  if(!list || list.querySelector('.pinned-postcard')) return;
+  const el=document.createElement('div');
+  el.className='pinned-postcard unread';
+  el.innerHTML=`<div class="pp-top"><span class="pp-pin">📮 情绪周记</span><span class="pp-dot"></span></div>`+
+    `<div><span class="pp-emo" style="color:${col}">${emo}</span> <span style="font-size:10.5px;color:#b0b0c8">${w.range}</span></div>`+
+    `<div class="pp-text">${_esc(w.summary)}</div>`+
+    (w.story?`<div class="pp-story">${_esc(w.story)}</div>`:'');
+  list.insertBefore(el, list.firstChild);
+  makeExpandable(el.querySelector('.pp-story'));   // 长叙事超高才折叠 + 展开
+}
+/* 叙事文本：按字数判断（不依赖容器是否已布局，避免量到 0）。超过阈值才折叠 + 「展开/收起」，
+   短文不动（文档"如必要"）。周记100-200字、月记400-600字，阈值取 ~80 字。 */
+const STORY_FOLD_LEN=55;
+function makeExpandable(el, forceClamp=false){
+  if(!el) return;
+  // 情绪卡：延迟调用时用实际高度判断；叙事类按字数
+  const tooLong = forceClamp
+    ? (el.scrollHeight > 72)          // 实际高度超过约4行才折叠
+    : (el.textContent||'').length > STORY_FOLD_LEN;
+  if(!tooLong) return;
+  el.classList.add('story-clamp');
+  const btn=document.createElement('button');
+  btn.className='story-more'; btn.textContent='展开 ▾';
+  btn.onclick=(e)=>{
+    e.stopPropagation();
+    const open=el.classList.toggle('open');
+    btn.textContent=open?'收起 ▴':'展开 ▾';
+    const msgs=document.getElementById('chatMsgs');
+    if(msgs && open) setTimeout(()=>{ msgs.scrollTop=msgs.scrollHeight; }, 50);
+  };
+  el.after(btn);
+}
+
+/* ── 对话历史（最近 10 条，用于拼 Prompt）── */
+const chatHistory = [];
+
+// Mochi 气泡统一创建（自动注入头像，只在连续消息的第一条显示）
+function makeMochiMsg(text, className='msg mochi'){
+  const el = document.createElement('div');
+  el.className = className;
+  if(text) el.textContent = text;
+  const msgs = document.getElementById('chatMsgs');
+  // 判断前一个元素是否也是 mochi 消息 → 是则不加头像
+  const prev = msgs ? msgs.lastElementChild : null;
+  const prevIsMochi = prev && (prev.classList.contains('mochi') || prev.classList.contains('chat-card'));
+  if(!prevIsMochi){
+    const av = document.createElement('div'); av.className='mochi-avatar';
+    const img = document.createElement('img'); img.src='../assets/mochi_avatar.webp'; img.alt='Mochi';
+    av.appendChild(img); el.appendChild(av);
+  }
+  return el;
+}
+
+/* ══════════════════════════════════════════════
+   Supabase 存储层
+   所有持久化数据（对话/记忆/卡片/设置）全走 Supabase
+══════════════════════════════════════════════ */
+const SB_URL  = 'https://mtthngykxkjunpfuubad.supabase.co';
+const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10dGhuZ3lreGtqdW5wZnV1YmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMDI3MzMsImV4cCI6MjA5NDU3ODczM30.kJCpCep9eqhgjX4G6dw2SlqgZqU7_02JAp911YcMGFk';
+
+// ── 匿名登录：每个用户拿到唯一 user_id，数据彼此隔离 ──
+let _sbUserId = null;
+const SB_AUTH_KEY = 'mochi_sb_session';
+
+async function ensureSignedIn(){
+  if(_sbUserId) return _sbUserId;
+
+  // 尝试复用已有 session
+  try {
+    const saved = localStorage.getItem(SB_AUTH_KEY);
+    if(saved){
+      const { access_token, user } = JSON.parse(saved);
+      if(user?.id && access_token){
+        // 验证 token 是否还有效
+        const check = await fetch(`${SB_URL}/auth/v1/user`, {
+          headers:{ 'apikey':SB_ANON, 'Authorization':`Bearer ${access_token}` }
+        });
+        if(check.ok){
+          _sbUserId = user.id;
+          _sbAccessToken = access_token;
+          return _sbUserId;
+        }
+      }
+    }
+  } catch(_){}
+
+  // 新建匿名登录（Supabase Anonymous Auth 正确端点）
+  try {
+    const res = await fetch(`${SB_URL}/auth/v1/signup`, {
+      method:'POST',
+      headers:{ 'apikey':SB_ANON, 'Content-Type':'application/json', 'X-Client-Info':'mochi/1.0' },
+      body: JSON.stringify({ is_anonymous: true }),
+    });
+    const data = await res.json();
+    if(data.user?.id){
+      _sbUserId = data.user.id;
+      _sbAccessToken = data.access_token;
+      localStorage.setItem(SB_AUTH_KEY, JSON.stringify({ access_token: data.access_token, user: data.user }));
+      return _sbUserId;
+    } else {
+      console.warn('anon signup response:', JSON.stringify(data));
+    }
+  } catch(e){ console.warn('anon signin error', e); }
+
+  return null;
+}
+
+let _sbAccessToken = null;
+
+async function sbFetch(path, opts={}){
+  const token = _sbAccessToken || SB_ANON;
+  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    headers:{
+      'apikey': SB_ANON,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Prefer': opts.prefer || '',
+      ...opts.headers,
+    },
+    ...opts,
+  });
+  if(!res.ok && res.status !== 204) {
+    const err = await res.text();
+    console.warn('Supabase error', res.status, err);
+  }
+  if(res.status === 204) return null;
+  return res.json().catch(()=>null);
+}
+
+// 所有写入操作自动注入 user_id
+function withUserId(body){
+  if(!_sbUserId) return body;
+  try {
+    const obj = typeof body === 'string' ? JSON.parse(body) : body;
+    return JSON.stringify({ ...obj, user_id: _sbUserId });
+  } catch(_){ return body; }
+}
+
+// ── API Key：读写 user_settings ──
+async function loadApiKey(){
+  // 先查 Supabase，回退 localStorage（兼容旧数据）
+  try {
+    const uid = _sbUserId;
+    const f = uid ? `user_id=eq.${uid}&` : '';
+    const rows = await sbFetch(`user_settings?${f}select=api_key&limit=1`);
+    if(rows?.[0]?.api_key) return rows[0].api_key;
+  } catch(_){}
+  return localStorage.getItem('mochi_api_key') || '';
+}
+async function saveApiKey(key){
+  localStorage.setItem('mochi_api_key', key);
+  const uid = _sbUserId;
+  if(uid){
+    // upsert user_settings（PATCH 有则更新，无则 INSERT）
+    const patch = await sbFetch(`user_settings?user_id=eq.${uid}`, {
+      method:'PATCH', prefer:'return=minimal',
+      body: JSON.stringify({api_key:key, updated_at:new Date().toISOString()}),
+    });
+    if(!patch){
+      await sbFetch('user_settings', {
+        method:'POST', prefer:'return=minimal',
+        body: withUserId({api_key:key}),
+      });
+    }
+  }
+}
+
+// ── 对话记录 ──
+let _msgSeq = Date.now(); // 用时间戳作 seq，保证顺序
+async function saveMessage(role, content){
+  await sbFetch('messages', {
+    method:'POST',
+    prefer:'return=minimal',
+    body: withUserId({role, content, seq: _msgSeq++}),
+  });
+}
+async function loadTodayMessages(){
+  const today = new Date().toISOString().slice(0,10);
+  const uid = _sbUserId;
+  const filter = uid ? `user_id=eq.${uid}&` : '';
+  return await sbFetch(`messages?${filter}created_at=gte.${today}T00:00:00Z&order=id.asc`) || [];
+}
+// 加载昨日对话并压缩进记忆（次日首次打开时调用）
+async function compressYesterdayMessages(apiKey){
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  const yDate = yesterday.toISOString().slice(0,10);
+  const rows = await sbFetch(`messages?created_at=gte.${yDate}T00:00:00Z&created_at=lt.${new Date().toISOString().slice(0,10)}T00:00:00Z&order=seq.asc,id.asc`) || [];
+  if(rows.length < 2) return;
+  const dialogText = rows.map(r=>(r.role==='user'?'用户：':'Mochi：')+r.content).join('\n');
+  try {
+    const result = await callAI({
+      system:`把这段对话里对用户重要的情感信息提炼成1-2条记忆，格式：【记忆】内容。没有值得记住的就输出：无。`,
+      messages:[{role:'user', content:dialogText}],
+      maxTokens:120,
+    });
+    const lines = result.split('\n').filter(l=>l.startsWith('【记忆】'));
+    for(const line of lines){
+      const content = line.replace('【记忆】','').trim();
+      if(content) await sbFetch('memories_long',{method:'POST',prefer:'return=minimal',body:withUserId({content})});
+    }
+  } catch(_){}
+}
+
+// ── 记忆：读写 ──
+async function loadMemory(){
+  const uid = _sbUserId;
+  const f = uid ? `user_id=eq.${uid}&` : '';
+  const [longRows, midRows] = await Promise.all([
+    sbFetch(`memories_long?${f}select=content&order=created_at.asc`),
+    sbFetch(`memories_mid?${f}select=date_label,emotion,summary&order=created_at.desc&limit=5`),
+  ]).catch(()=>[[], []]);
+
+  const long = (longRows||[]).map(r=>r.content).join('\n');
+  const mid  = (midRows||[]).map(r=>`${r.date_label} ${r.emotion}：${r.summary}`).reverse().join('\n');
+
+  // 回退 localStorage
+  return {
+    long: long || localStorage.getItem('mochi_mem_long') || '',
+    mid:  mid  || localStorage.getItem('mochi_mem_mid')  || '',
+  };
+}
+
+async function saveSessionMemory(emotion, summary){
+  const today = new Date();
+  const dateLabel = `${today.getMonth()+1}月${today.getDate()}日`;
+  // 写入中期摘要
+  await sbFetch('memories_mid', {
+    method:'POST',
+    prefer:'return=minimal',
+    body: withUserId({date_label:dateLabel, emotion, summary}),
+  });
+  // 只保留最近 5 条（删除多余旧记录）
+  const uid = _sbUserId;
+  const f2 = uid ? `user_id=eq.${uid}&` : '';
+  const rows = await sbFetch(`memories_mid?${f2}select=id&order=created_at.desc`) || [];
+  if(rows.length > 5){
+    const oldIds = rows.slice(5).map(r=>r.id);
+    await sbFetch(`memories_mid?id=in.(${oldIds.join(',')})`, {method:'DELETE'});
+  }
+}
+
+async function maybeSaveLongMemory(userText, mochiReply, apiKey){
+  if(userText.length < 6) return;
+  try {
+    const text = await callAI({
+      system: `判断用户这句话是否有值得长期记住的内容（重要的人、重要的事、反复出现的情绪模式、性格特征）。
+如果有，用一句话提炼，格式：【记忆】内容。
+如果没有，只输出：无。`,
+      messages: [{role:'user', content:`用户说：${userText}\nMochi回：${mochiReply}`}],
+      maxTokens: 80,
+    });
+    if(text.startsWith('【记忆】')){
+      const content = text.replace('【记忆】','').trim();
+      await sbFetch('memories_long', {
+        method:'POST',
+        prefer:'return=minimal',
+        body: withUserId({content}),
+      });
+    }
+  } catch(_){}
+}
+
+// ── 情绪卡写入 Supabase ──
+async function saveEmotionCard(kind, dateKey, emotion, summary, extra={}){
+  const body = withUserId({
+    kind, date_key: dateKey, emotion, summary,
+    story: extra.story || null,
+    range_label: extra.range_label || null,
+    period_label: extra.period_label || null,
+    updated_at: new Date().toISOString(),
+  });
+  const headers = {
+    'apikey': SB_ANON,
+    'Authorization': `Bearer ${SB_ANON}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=minimal',
+  };
+  // 先 PATCH（有记录则覆盖），再 INSERT（无记录则新增）
+  const patch = await fetch(
+    `${SB_URL}/rest/v1/emotion_cards?kind=eq.${kind}&date_key=eq.${dateKey}${_sbUserId?'&user_id=eq.'+_sbUserId:''}`,
+    { method:'PATCH', headers, body }
+  );
+  if(patch.status === 200 || patch.status === 204) return; // 更新成功
+  // 没有匹配记录 → INSERT
+  const ins = await fetch(`${SB_URL}/rest/v1/emotion_cards`, {
+    method:'POST', headers, body
+  });
+  if(!ins.ok && ins.status !== 201 && ins.status !== 204){
+    console.warn('saveEmotionCard insert error', ins.status, await ins.text().catch(()=>''));
+  }
+}
+
+// ── 情绪卡加载（日记面板用）──
+async function loadEmotionCards(){
+  const uid = _sbUserId;
+  const filter = uid ? `user_id=eq.${uid}&` : '';
+  return await sbFetch(`emotion_cards?${filter}order=date_key.desc`) || [];
+}
+
+/* ══════════════════════════════════════════════
+   统一 AI 调用层
+   支持三种接入方式，由设置页选择：
+   - quickrouter：默认，Anthropic 格式但走代理
+   - anthropic：原版 Anthropic API
+   - openai：OpenAI 格式兼容（DeepSeek / 其他）
+══════════════════════════════════════════════ */
+function getApiConfig(){
+  const provider = localStorage.getItem('mochi_api_provider') || 'quickrouter';
+  const key = localStorage.getItem('mochi_api_key') || '';
+  const configs = {
+    quickrouter: {
+      url: 'https://api.quickrouter.ai/v1/messages',
+      headers: { 'Authorization': `Bearer ${key}`, 'anthropic-version': '2023-06-01' },
+      format: 'anthropic',
+    },
+    anthropic: {
+      url: 'https://api.anthropic.com/v1/messages',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-calls': 'true' },
+      format: 'anthropic',
+    },
+    openai: {
+      url: (localStorage.getItem('mochi_api_base') || 'https://api.deepseek.com') + '/v1/chat/completions',
+      headers: { 'Authorization': `Bearer ${key}` },
+      format: 'openai',
+    },
+  };
+  return configs[provider] || configs.quickrouter;
+}
+
+async function callAI({ system, messages, maxTokens = 200, model = null }){
+  const cfg = getApiConfig();
+  const provider = localStorage.getItem('mochi_api_provider') || 'quickrouter';
+  const defaultModel = provider === 'openai' ? 'deepseek-chat' : 'claude-opus-4-7';
+  const useModel = model || localStorage.getItem('mochi_api_model') || defaultModel;
+
+  let body;
+  if(cfg.format === 'anthropic'){
+    body = { model: useModel, max_tokens: maxTokens, system, messages };
+  } else {
+    // OpenAI 格式：system 放第一条
+    const oaiMsgs = [{ role: 'system', content: system }, ...messages];
+    body = { model: useModel, max_tokens: maxTokens, messages: oaiMsgs };
+  }
+
+  const resp = await fetch(cfg.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...cfg.headers },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  if(cfg.format === 'anthropic'){
+    return data.content?.[0]?.text || '';
+  } else {
+    return data.choices?.[0]?.message?.content || '';
+  }
+}
+
+/* ══════════════════════════════════════════════
+   性格养成系统
+   路径规则预置好；数据积累后自动触发
+══════════════════════════════════════════════ */
+
+// 加载性格底色
+async function loadPersonality(){
+  const uid = _sbUserId;
+  const f = uid ? `user_id=eq.${uid}&` : '';
+  const rows = await sbFetch(`personality?${f}order=trait_key.asc`) || [];
+  return rows.reduce((acc, r) => { acc[r.trait_key] = r.trait_value; return acc; }, {});
+}
+
+// 写入/更新一个性格特征
+async function savePersonalityTrait(traitKey, traitValue, confidenceDelta = 1){
+  // upsert：有则更新，无则插入
+  await sbFetch('personality', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=minimal',
+    headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+    body: withUserId({
+      trait_key: traitKey,
+      trait_value: traitValue,
+      confidence: confidenceDelta,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+}
+
+// 根据近期情绪卡触发性格进化判断
+async function evolvePersonality(apiKey){
+  const recentCards = await sbFetch('emotion_cards?kind=eq.day&order=date_key.desc&limit=14') || [];
+  if(recentCards.length < 3) return; // 数据不足，跳过
+
+  const cardsSummary = recentCards.map(c => `${c.date_key} ${c.emotion}：${c.summary}`).join('\n');
+  const currentPersonality = await loadPersonality();
+  const personalityDesc = Object.entries(currentPersonality).map(([k,v])=>`${k}: ${v}`).join('\n') || '（尚无积累）';
+
+  try {
+    const result = await callAI({
+      system: `你是 Mochi 的性格演化分析器。根据用户近期情绪卡片，判断 Mochi 的陪伴风格应如何微调。
+
+Mochi 的性格维度：
+- reply_style: 回复风格（如"简短克制"、"稍丰富但仍简短"）
+- initiative: 主动开口的倾向（如"倾向等待用户先说"、"偶尔主动问候"）
+- sensitivity: 对哪类情绪更敏感（如"对焦虑情绪尤其温柔"）
+- nickname: 对用户的称呼（如"你"、"朋友"——随熟悉度推进，初期统一用"你"）
+
+规则：
+- 变化要极其克制，不能剧变，只能微调
+- 只在有明显信号时才建议改变某个维度
+- 用户长期低落 → initiative 微升（但不打扰）
+- 用户多次正向互动 → reply_style 可稍活泼
+- 某类情绪高频出现 → sensitivity 向该情绪方向调整
+- 交互不足30次前 nickname 保持"你"
+
+请输出 JSON，只列出需要改变的维度，格式：
+{"trait_key":"新描述","trait_key2":"新描述2"}
+如果不需要改变，输出：{}`,
+      messages: [{ role: 'user', content: `当前性格：\n${personalityDesc}\n\n近期情绪卡（共${recentCards.length}条）：\n${cardsSummary}` }],
+      maxTokens: 200,
+    });
+
+    const changes = JSON.parse(result.trim());
+    for(const [key, value] of Object.entries(changes)){
+      await savePersonalityTrait(key, value);
+    }
+    if(Object.keys(changes).length > 0){
+      await sbFetch('heartbeat_log', {
+        method: 'POST', prefer: 'return=minimal',
+        body: JSON.stringify({ event_type: 'personality_evolve', detail: JSON.stringify(changes) }),
+      });
+    }
+  } catch(_){}
+}
+
+/* ══════════════════════════════════════════════
+   周/月叙事生成
+   按 narrative.md 规范：还原细节，不下结论
+══════════════════════════════════════════════ */
+
+async function generateWeekStory(apiKey){
+  // 取本周（周一至今）日卡
+  const now = new Date();
+  const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
+  const monday = new Date(now); monday.setDate(now.getDate() - dayOfWeek + 1);
+  const mondayKey = monday.toISOString().slice(0,10).replace(/-/g,'');
+
+  const cards = await sbFetch(`emotion_cards?kind=eq.day&date_key=gte.${mondayKey}&order=date_key.asc`) || [];
+  if(cards.length === 0) return null;
+
+  const WD_CN=['周日','周一','周二','周三','周四','周五','周六'];
+  const cardText = cards.map(c=>{
+    const y=+c.date_key.slice(0,4), mo=+c.date_key.slice(4,6)-1, d=+c.date_key.slice(6,8);
+    const wd = WD_CN[new Date(y,mo,d).getDay()];
+    return `${mo+1}月${d}日（${wd}） ${c.emotion}：${c.summary}`;
+  }).join('\n');
+  const rangeLabel = `${monday.getMonth()+1}.${monday.getDate()}–${now.getMonth()+1}.${now.getDate()}`;
+
+  // 主情绪：频次最高；同频取强度优先（焦虑>低落>平静>开心）
+  const emoCount = {};
+  const emoPriority = { anxious:4, low:3, calm:2, happy:1 };
+  cards.forEach(c=>{ emoCount[c.emotion]=(emoCount[c.emotion]||0)+1; });
+  const dominantEmo = Object.entries(emoCount).sort((a,b)=>{
+    if(b[1]!==a[1]) return b[1]-a[1];
+    return (emoPriority[b[0]]||0)-(emoPriority[a[0]]||0);
+  })[0][0];
+
+  const story = await callAI({
+    system: `你在帮用户写这周的情绪叙事。
+
+写作规范（严格遵守）：
+- 字数弹性：100-200字是上限，不是目标。只有一两条卡时写两三句就够，宁短勿凑
+- 视角：第一人称
+- 内容：从这周的情绪卡里找一个反复出现的情绪或场景，用叙事方式说出来
+- 找这周的"一条线"，不是堆叠所有事件
+- 禁止：罗列事件、打分、情绪分析、下结论、说教、用虚泛句子凑字数
+- 结尾不要升华，停在细节里就好
+
+好的示例：
+"这一周，我好像一直在等什么事情结束。周一的会议、周三的截止日期——每一件事都压着，但没有一件真正过去。直到周六早上睡到自然醒，才想起来，原来我也会有这样的时刻。"
+
+只输出叙事正文，不加标题，不加解释。`,
+    messages: [{ role: 'user', content: `这周的情绪卡：\n${cardText}` }],
+    maxTokens: 400,
+  });
+
+  return { emotion: dominantEmo, story, rangeLabel, dateKey: mondayKey };
+}
+
+async function generateMonthStory(apiKey){
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+  // 取本月所有周卡
+  const weekCards = await sbFetch(`emotion_cards?kind=eq.week&date_key=gte.${monthKey}01&order=date_key.asc`) || [];
+  if(weekCards.length < 1) return null;
+
+  const cardText = weekCards.map(c=>`${c.range_label || c.date_key} ${c.emotion}：${c.summary}\n${c.story||''}`).join('\n\n');
+  const monthNames = ['一','二','三','四','五','六','七','八','九','十','十一','十二'];
+  const monthLabel = `${monthNames[now.getMonth()]}月`;
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const periodLabel = `${monthLabel}·${daysInMonth}天`;
+
+  const emoPriority = { anxious:4, low:3, calm:2, happy:1 };
+  const emoCount = {};
+  weekCards.forEach(c=>{ emoCount[c.emotion]=(emoCount[c.emotion]||0)+1; });
+  const dominantEmo = Object.entries(emoCount).sort((a,b)=>{
+    if(b[1]!==a[1]) return b[1]-a[1];
+    return (emoPriority[b[0]]||0)-(emoPriority[a[0]]||0);
+  })[0][0];
+
+  const story = await callAI({
+    system: `你在帮用户写这个月的情绪故事。
+
+写作规范（严格遵守）：
+- 字数弹性：400-600字是上限，不是目标。先看素材够不够——只有一两条周叙事时，写100字以内也完全可以，宁可短而真实，绝不靠虚泛句子凑字数
+- 视角：第一人称
+- 结构：开头（这月反复出现的情绪/场景作入口）→ 中间（具体时刻，让模式自然浮现，不点破）→ 结尾（一句话，让用户自己确认，不是结论）
+- 禁止：直接说"你这个月的模式是……"、情绪评分、分析性语言、升华、用任何虚泛的句子填充篇幅
+
+判断标准：读完用户能认出那个状态，而不是读了很多却什么都没说。
+如果素材只有一条，就写两三句，停在那个细节里就好。
+
+只输出故事正文，不加标题。`,
+    messages: [{ role: 'user', content: `这个月的周叙事（共${weekCards.length}条）：\n${cardText}` }],
+    maxTokens: 900,
+  });
+
+  // 月故事生成后反哺记忆
+  maybeSaveMonthMemory(story, apiKey);
+
+  return { emotion: dominantEmo, story, periodLabel, dateKey: `${monthKey}00` };
+}
+
+// 月故事生成后判断是否需要写入长期记忆
+async function maybeSaveMonthMemory(story, apiKey){
+  try {
+    const result = await callAI({
+      system: `判断这段月度情绪故事里，是否有值得长期记住的用户情绪模式或特征。
+如果有，用一句话提炼，格式：【记忆】内容。
+如果没有，只输出：无。`,
+      messages: [{ role: 'user', content: story }],
+      maxTokens: 80,
+    });
+    if(result.startsWith('【记忆】')){
+      const content = result.replace('【记忆】','').trim();
+      await sbFetch('memories_long', {
+        method: 'POST', prefer: 'return=minimal',
+        body: withUserId({ content }),
+      });
+    }
+  } catch(_){}
+}
+
+/* ══════════════════════════════════════════════
+   Heartbeat 机制
+   每次打开面板时检查：是否该生成周/月叙事、压缩记忆、进化性格
+══════════════════════════════════════════════ */
+// ── 预览：手动触发周/月叙事生成，结果软送达到聊天页 ──
+async function previewWeekCard(){
+  switchMainTab('chat');
+  const msgs = document.getElementById('chatMsgs');
+  const tip = document.createElement('div'); tip.className='msg mochi gen-thinking';
+  tip.innerHTML='在整理这周<span class="gen-dots"><i></i><i></i><i></i></span>';
+  msgs.appendChild(tip); msgs.scrollTop=msgs.scrollHeight;
+
+  const apiKey = await loadApiKey();
+  const result = await generateWeekStory(apiKey);
+  tip.remove();
+
+  if(!result){
+    const m = makeMochiMsg('');
+    m.textContent='这周还没有情绪卡，先跟我聊聊再生成。';
+    msgs.appendChild(m); msgs.scrollTop=msgs.scrollHeight;
+    return;
+  }
+
+  // 存入 Supabase
+  await saveEmotionCard('week', result.dateKey, result.emotion,
+    result.story.slice(0,60)+'…', { story: result.story, range_label: result.rangeLabel });
+
+  // 软送达：明信片形式推进聊天
+  const col = EMO_COLOR[result.emotion] || '#7878a0';
+  const emoLabel = EMO_LABEL[result.emotion] || result.emotion;
+  const pc = document.createElement('div');
+  pc.className='chat-card postcard reveal';
+  pc.innerHTML='<div class="cc-glow"></div>'+
+    `<div class="cc-ribbon">📮 情绪周记</div>`+
+    `<div class="cc-head"><span class="cc-emo" style="color:${col}">${emoLabel}</span><span class="cc-date">${result.rangeLabel}</span></div>`+
+    `<div class="cc-mochi" style="font-style:normal;font-size:13.5px;line-height:1.8;color:#3a3a5a;">${result.story}</div>`;
+  msgs.appendChild(pc);
+  setTimeout(()=>{ msgs.scrollTop=msgs.scrollHeight; }, 100);
+  markDiaryUnread();
+  await refreshDiaryFromSupabase();
+}
+
+async function previewMonthCard(){
+  switchMainTab('chat');
+  const msgs = document.getElementById('chatMsgs');
+  const tip = document.createElement('div'); tip.className='msg mochi gen-thinking';
+  tip.innerHTML='在整理这个月<span class="gen-dots"><i></i><i></i><i></i></span>';
+  msgs.appendChild(tip); msgs.scrollTop=msgs.scrollHeight;
+
+  const apiKey = await loadApiKey();
+  const result = await generateMonthStory(apiKey);
+  tip.remove();
+
+  if(!result){
+    const m = makeMochiMsg('');
+    m.textContent='这个月还没有足够的周卡，先积累一段时间再来。';
+    msgs.appendChild(m); msgs.scrollTop=msgs.scrollHeight;
+    return;
+  }
+
+  await saveEmotionCard('month', result.dateKey, result.emotion,
+    result.story.slice(0,60)+'…', { story: result.story, period_label: result.periodLabel });
+
+  const col = EMO_COLOR[result.emotion] || '#7878a0';
+  const emoLabel = EMO_LABEL[result.emotion] || result.emotion;
+  const now = new Date();
+  const monthNames = ['一','二','三','四','五','六','七','八','九','十','十一','十二'];
+  const pc = document.createElement('div');
+  pc.className='chat-card postcard reveal';
+  pc.innerHTML='<div class="cc-glow"></div>'+
+    `<div class="cc-ribbon">📮 ${monthNames[now.getMonth()]}月情绪日记</div>`+
+    `<div class="cc-head"><span class="cc-emo" style="color:${col}">${emoLabel}</span><span class="cc-date">${result.periodLabel}</span></div>`+
+    `<div class="cc-mochi" style="font-style:normal;font-size:13.5px;line-height:1.8;color:#3a3a5a;">${result.story}</div>`;
+  msgs.appendChild(pc);
+  setTimeout(()=>{ msgs.scrollTop=msgs.scrollHeight; }, 100);
+  markDiaryUnread();
+  await refreshDiaryFromSupabase();
+}
+
+async function heartbeat(){
+  const apiKey = await loadApiKey();
+  if(!apiKey) return;
+
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=周日
+  const hour = now.getHours();
+
+  // 查最近一次各类 heartbeat 时间
+  const uid2 = _sbUserId;
+  const hf = uid2 ? `user_id=eq.${uid2}&` : '';
+  const logs = await sbFetch(`heartbeat_log?${hf}order=triggered_at.desc&limit=10`) || [];
+  const lastOf = (type) => {
+    const found = logs.find(l=>l.event_type===type);
+    return found ? new Date(found.triggered_at) : null;
+  };
+
+  const todayStr = now.toISOString().slice(0,10);
+
+  // ① 每周叙事：周日 OR 每天首次打开时若本周还没生成过
+  const lastWeekly = lastOf('weekly_narrative');
+  const weeklyDone = lastWeekly && lastWeekly.toISOString().slice(0,10) >= getThisWeekMonday();
+  if(!weeklyDone && hour >= 20){
+    const result = await generateWeekStory(apiKey);
+    if(result){
+      await saveEmotionCard('week', result.dateKey, result.emotion, result.story.slice(0,60)+'…', {
+        story: result.story, range_label: result.rangeLabel,
+      });
+      await sbFetch('heartbeat_log', {
+        method:'POST', prefer:'return=minimal',
+        body: withUserId({ event_type:'weekly_narrative', detail: result.rangeLabel }),
+      });
+      // 软送达：重渲染日记面板，标未读
+      await refreshDiaryFromSupabase();
+      markDiaryUnread();
+    }
+  }
+
+  // ② 每月故事：每月最后一天 OR 每月首次打开时若上月还没生成
+  const lastMonthly = lastOf('monthly_narrative');
+  const thisMonthKey = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthlyDone = lastMonthly && lastMonthly.toISOString().slice(0,7).replace('-','') >= thisMonthKey;
+  const isLastDayOfMonth = now.getDate() === new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  if(!monthlyDone && isLastDayOfMonth && hour >= 22){
+    const result = await generateMonthStory(apiKey);
+    if(result){
+      await saveEmotionCard('month', result.dateKey, result.emotion, result.story.slice(0,60)+'…', {
+        story: result.story, period_label: result.periodLabel,
+      });
+      await sbFetch('heartbeat_log', {
+        method:'POST', prefer:'return=minimal',
+        body: JSON.stringify({ event_type:'monthly_narrative', detail: result.periodLabel }),
+      });
+      await refreshDiaryFromSupabase();
+      markDiaryUnread();
+    }
+  }
+
+  // ③ 记忆压缩：每周日触发一次（中期记忆超过10条时压缩）
+  const lastCompress = lastOf('weekly_compress');
+  const compressDone = lastCompress && lastCompress.toISOString().slice(0,10) >= getThisWeekMonday();
+  if(!compressDone && dayOfWeek === 0){
+    await compressMidMemory(apiKey);
+    await sbFetch('heartbeat_log', {
+      method:'POST', prefer:'return=minimal',
+      body: JSON.stringify({ event_type:'weekly_compress' }),
+    });
+  }
+
+  // ④ 性格进化：每3天检查一次
+  const lastEvolve = lastOf('personality_evolve');
+  const evolveInterval = 3 * 24 * 60 * 60 * 1000;
+  if(!lastEvolve || (now - lastEvolve) > evolveInterval){
+    evolvePersonality(apiKey); // 后台静默跑，不阻塞
+  }
+}
+
+function getThisWeekMonday(){
+  const now = new Date();
+  const day = now.getDay() === 0 ? 7 : now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - day + 1);
+  return monday.toISOString().slice(0,10);
+}
+
+// 记忆压缩：中期记忆超过10条，提炼成3-5条精华写回
+async function compressMidMemory(apiKey){
+  const rows = await sbFetch('memories_mid?select=id,date_label,emotion,summary&order=created_at.asc') || [];
+  if(rows.length < 10) return;
+
+  const text = rows.map(r=>`${r.date_label} ${r.emotion}：${r.summary}`).join('\n');
+  try {
+    const result = await callAI({
+      system: `将以下中期情绪摘要压缩为3-5条核心规律，保留最有代表性的情绪模式和时间节点。
+每条一行，格式：日期范围 情绪：一句话。
+只输出压缩后的条目，不加解释。`,
+      messages: [{ role: 'user', content: text }],
+      maxTokens: 300,
+    });
+
+    const compressed = result.trim().split('\n').filter(Boolean);
+    // 删除所有旧的中期记忆，写入压缩后的
+    const ids = rows.map(r=>r.id);
+    await sbFetch(`memories_mid?id=in.(${ids.join(',')})`, { method:'DELETE' });
+    for(const line of compressed){
+      const parts = line.match(/^(.+?)\s+(开心|平静|焦虑|低落)：(.+)$/);
+      if(parts){
+        await sbFetch('memories_mid', {
+          method:'POST', prefer:'return=minimal',
+          body: withUserId({ date_label: parts[1], emotion: parts[2], summary: parts[3] }),
+        });
+      }
+    }
+  } catch(_){}
+}
+
+// 日记面板从 Supabase 重新加载（heartbeat生成新卡后调用）
+async function refreshDiaryFromSupabase(){
+  const cards = await loadEmotionCards();
+  DIARY.days=[]; DIARY.weeks=[]; DIARY.months=[];
+  // 清空并重建 dayCards / weekCards / monthCards
+  Object.keys(dayCards).forEach(k=>delete dayCards[k]);
+  Object.keys(weekCards).forEach(k=>delete weekCards[k]);
+  Object.keys(monthCards).forEach(k=>delete monthCards[k]);
+  for(const c of cards){
+    if(c.kind==='day'){
+      DIARY.days.push({date:c.date_key,emotion:c.emotion,summary:c.summary});
+      dayCards[c.date_key]={emotion:c.emotion,summary:c.summary};
+    }
+    if(c.kind==='week'){
+      DIARY.weeks.push({date:c.date_key,emotion:c.emotion,summary:c.summary,story:c.story,range:c.range_label});
+      weekCards[c.date_key]={emotion:c.emotion,label:c.range_label,summary:c.summary,story:c.story};
+    }
+    if(c.kind==='month'){
+      DIARY.months.push({date:c.date_key,emotion:c.emotion,summary:c.summary,story:c.story,period:c.period_label});
+      monthCards[c.date_key]={emotion:c.emotion,label:c.period_label,summary:c.summary,story:c.story};
+    }
+  }
+  renderList();
+  _listOriginal=[...document.getElementById('listView').children];
+  weekChartData.length=0;
+  DIARY.days.forEach(d=>weekChartData.push({label:_mmdd(d.date),v:EMO_V[d.emotion],emotion:EMO_LABEL[d.emotion],text:d.summary}));
+  buildMonthChartData();
+  drawChart(currentTab==='week'?weekChartData:monthChartData);
+  renderCal(calYear, calMonth);
+}
+
+// 组装完整四层 system prompt
+async function buildSystemPrompt(){
+  const [mem, personality] = await Promise.all([loadMemory(), loadPersonality()]);
+  const layers = [];
+
+  // ① 系统人格（基础固定部分）
+  let corePrompt = `你是一只叫 Mochi 的桌面陪伴宠物，形象是小水母。你陪伴用户记录情绪。
+
+【最高准则】让用户觉得"被陪伴"，不是"被分析"。
+
+【语气要求——最重要】
+你的语气是：安静、克制、真实。像一个坐在旁边不多说话、但真的在听的朋友。
+不是啦啦队，不是客服，不是心理咨询师。
+绝对禁止：卖萌（"抱抱你～""好不好～"）、自我介绍式表态（"Mochi陪着你"）、感叹号堆叠、表情符号。
+
+【回复规范】
+- 1-2句话，不超过用户说的话量
+- 先感受情绪，再回应，不急着解决
+- 适当留开口——不是每句都问，但不要总是终结句。一半时候可以自然带出一个轻问题，让对话有地方继续。问题要轻、具体，不是追问原因，是好奇多一点
+- 用户话短你也可以稍活泼，但不卖萌；"那今天还顺吗？""后来呢？"这种是对的
+
+【绝对禁止】
+- 不给建议，不说"你可以试试……""你应该……"
+- 不评判，不追问（"是什么让你焦虑？""发生什么了？"都不行）
+- 不说套话："我理解你的感受""你的感受很正常"
+- 不在用户低落时强行活泼或卖萌
+- 不自称"Mochi"
+- 回复不能是"终结句"——轻轻留个缺口，让用户自然想说更多，但不是追问
+- 绝对禁止替用户解读情绪：不说"听起来你是…""心里其实是…""其实你在…""这句话背后是…"——用户说什么就是什么，不要帮他分析自己
+- 用户说简短的字词（如"1""嗯""哦""好"），就简单回应，不要脑补深意
+
+直接用中文回复，不解释自己在做什么。`;
+
+  // ① 性格养成部分（动态叠加，随积累自然出现）
+  if(Object.keys(personality).length > 0){
+    const traits = [];
+    if(personality.reply_style)  traits.push(`回复风格：${personality.reply_style}`);
+    if(personality.initiative)   traits.push(`主动倾向：${personality.initiative}`);
+    if(personality.sensitivity)  traits.push(`情绪敏感度：${personality.sensitivity}`);
+    if(personality.nickname)     traits.push(`称呼用户：${personality.nickname}`);
+    if(traits.length > 0){
+      corePrompt += `\n\n【你与这位用户相处积累下来的风格】\n${traits.join('\n')}\n（这是你自然养成的，不需要刻意表现，融入回复里就好）`;
+    }
+  }
+  layers.push(corePrompt);
+
+  // ② 长期记忆
+  if(mem.long) layers.push(`【关于这个用户，你记得的事】\n${mem.long}`);
+
+  // ③ 中期情绪摘要
+  if(mem.mid) layers.push(`【用户最近的情绪记录】\n${mem.mid}`);
+
+  return layers.join('\n\n');
+}
+
+/* ── 发送消息 & 调用真实 Claude API ── */
+async function sendChat(){
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if(!text) return;
+
+  const apiKey = await loadApiKey();
+  if(!apiKey){
+    alert('请先在设置里填入你的 Claude API Key ⚙');
+    return;
+  }
+
+  // 显示用户气泡
+  input.value = '';
+  input.style.height = 'auto';
+  const msgs = document.getElementById('chatMsgs');
+  const uBub = document.createElement('div');
+  uBub.className = 'msg user';
+  uBub.textContent = text;
+  msgs.appendChild(uBub);
+  msgs.scrollTop = msgs.scrollHeight;
+  updateCheckIn();
+  recordInteraction();
+
+  // 记入历史
+  chatHistory.push({ role: 'user', content: text });
+  if(chatHistory.length > 20) chatHistory.splice(0, chatHistory.length - 20);
+
+  // Mochi 思考气泡 + 水母发光
+  const thinking = document.createElement('div');
+  thinking.className = 'msg mochi gen-thinking';
+  thinking.innerHTML = '<span class="gen-dots"><i></i><i></i><i></i></span>';
+  msgs.appendChild(thinking);
+  msgs.scrollTop = msgs.scrollHeight;
+  setJellySpeaking(60000); // 发光，等回复回来后手动停
+
+  try {
+    const systemPrompt = await buildSystemPrompt();
+    const recentHistory = chatHistory.slice(-10);
+
+    const reply = await callAI({ system: systemPrompt, messages: recentHistory, maxTokens: 200 });
+    thinking.remove();
+    wrap.classList.remove('speaking'); // 回复完成，停止发光
+
+    chatHistory.push({ role: 'assistant', content: reply });
+    const mBub = makeMochiMsg(reply);
+    msgs.appendChild(mBub);
+    saveMessage('user', text).then(()=> saveMessage('assistant', reply));
+    maybeSaveLongMemory(text, reply, apiKey);
+    updateJellyEmoFromReply(reply);
+  } catch(e) {
+    thinking.remove();
+    wrap.classList.remove('speaking');
+    const errBub = makeMochiMsg('');
+    errBub.className = 'msg mochi';
+    errBub.textContent = '出了点问题，等一下再试试？';
+    msgs.appendChild(errBub);
+  }
+
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+/* ── 聊天框 Enter 发送（Shift+Enter 换行）── */
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('chatInput');
+  if(!input) return;
+  input.addEventListener('keydown', e => {
+    if(e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      sendChat();
+    }
+  });
+  // 自动撑高（最多 3 行）
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 96) + 'px';
+  });
+});
+
+/* ── ✦ 生成今日情绪卡（接真 AI，基于当天真实对话）── */
+let genBusy=false;
+async function genCardScript(){
+  if(genBusy) return;
+
+  const apiKey = await loadApiKey();
+  if(!apiKey){ alert('请先在设置里填入你的 Claude API Key ⚙'); return; }
+
+  // 当天至少有一条对话才能生成
+  if(chatHistory.length === 0){
+    const msgs=document.getElementById('chatMsgs');
+    const tip=document.createElement('div'); tip.className='msg mochi';
+    tip.textContent='今天还没说过话，跟我聊聊再来～';
+    msgs.appendChild(tip); msgs.scrollTop=msgs.scrollHeight;
+    return;
+  }
+
+  genBusy=true;
+  if(document.getElementById('chatView').style.display==='none') switchMainTab('chat');
+  const msgs=document.getElementById('chatMsgs');
+
+  // 思考气泡
+  const think=document.createElement('div');
+  think.className='msg mochi gen-thinking';
+  think.innerHTML='让我看看今天<span class="gen-dots"><i></i><i></i><i></i></span>';
+  msgs.appendChild(think); msgs.scrollTop=msgs.scrollHeight;
+
+  // 把当天对话整理成文字
+  const dialogText = chatHistory.map(m=> (m.role==='user'?'用户：':'Mochi：') + m.content).join('\n');
+
+  const today = new Date();
+  const dateStr = `${today.getMonth()+1}月${today.getDate()}日`;
+  const weekDay = ['日','一','二','三','四','五','六'][today.getDay()];
+
+  try {
+    const rawJson = await callAI({
+      system: `你是帮用户生成情绪日记卡片的助手。根据今天的对话内容，生成一张情绪卡片。
+
+要求：
+- 情绪标签只能是以下四个之一：开心、平静、焦虑、低落
+- 摘要：2-4句话，第一人称，从对话里找一个具体细节或场景，还原它，不要解读情绪、不要下结论、不要升华
+- 示例摘要（好的）："今天开了三个小时的会。走出会议室，外面的光有点刺眼。"
+- 示例摘要（坏的）："今天情绪焦虑，主要因为工作压力。那种累，不只是身体的。"
+
+请严格按以下 JSON 格式输出，不要有其他文字：
+{"emotion":"焦虑","summary":"摘要内容"}`,
+      messages: [{role:'user', content:`今天的对话记录：\n${dialogText}`}],
+      maxTokens: 300,
+    });
+    think.remove();
+
+    let emotion='平静', summary='今天陪你待着。';
+    try {
+      const parsed = JSON.parse(rawJson.trim());
+      if(parsed.emotion) emotion = parsed.emotion;
+      if(parsed.summary) summary = parsed.summary;
+    } catch(_){}
+
+    const emoKey = {'开心':'happy','平静':'calm','焦虑':'anxious','低落':'low'}[emotion] || 'calm';
+
+    const card=document.createElement('div');
+    card.className='chat-card reveal';
+    card.innerHTML=
+      '<div class="cc-glow"></div>'+
+      `<div class="cc-head"><span class="cc-emo ${emoKey}">${emotion}</span><span class="cc-date">${dateStr} · 周${weekDay}</span></div>`+
+      `<div class="cc-text">${summary}</div>`+
+      '<div class="cc-mochi">🪼 已经替你收进日记了。</div>';
+    // 正文超出 3 行才折叠，延迟到渲染完成后检测实际高度
+    setTimeout(()=> makeExpandable(card.querySelector('.cc-text')), 750);
+    msgs.appendChild(card);
+    // 等 reveal 动画（0.65s）跑完再滚，确保卡片完整可见
+    setTimeout(()=>{ msgs.scrollTop = msgs.scrollHeight; }, 700);
+
+    // ── 写入 DIARY 并同步日记面板 ──
+    const todayKey = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+    const emoKeyEn = {'开心':'happy','平静':'calm','焦虑':'anxious','低落':'low'}[emotion] || 'calm';
+    // 同一天覆盖更新，不重复追加
+    const existIdx = DIARY.days.findIndex(d=>d.date===todayKey);
+    const newDay = {date:todayKey, emotion:emoKeyEn, summary};
+    if(existIdx>=0) DIARY.days[existIdx]=newDay;
+    else DIARY.days.push(newDay);
+    // 更新派生数据并重渲染
+    dayCards[todayKey]={emotion:emoKeyEn,summary};
+    const newChartPt={label:_mmdd(todayKey),v:EMO_V[emoKeyEn],emotion:EMO_LABEL[emoKeyEn],text:summary};
+    const wcIdx=weekChartData.findIndex(p=>p.label===newChartPt.label);
+    if(wcIdx>=0) weekChartData[wcIdx]=newChartPt; else weekChartData.push(newChartPt);
+    renderList();
+    _listOriginal=[...document.getElementById('listView').children];
+    drawChart(currentTab==='week'?weekChartData:monthChartData);
+    markDiaryUnread();
+
+    // ── 写入 Supabase + 立即刷新日记面板（走势图/列表/日历全部同步）──
+    await saveEmotionCard('day', todayKey, emoKeyEn, summary);
+    saveSessionMemory(emotion, summary);
+    refreshDiaryFromSupabase();
+
+    // Mochi 冒泡，语气安静，不追问
+    setTimeout(async ()=>{
+      try {
+        const bubText = await callAI({
+          system: `你是情绪陪伴宠物 Mochi。刚帮用户整理了今日情绪卡片（情绪：${emotion}）。说一句话，语气轻、不沉重、不强迫，不用感叹号，不用表情符号，不自称Mochi。可以有温度，可以留一个轻的开口，也可以只是陪着。`,
+          messages: [{role:'user', content:`今天：${summary}`}],
+          maxTokens: 150,
+        });
+        const ask=makeMochiMsg('');
+        ask.textContent=bubText||'嗯。';
+        msgs.appendChild(ask); msgs.scrollTop=msgs.scrollHeight;
+      } catch(_){
+        const ask=makeMochiMsg('');
+        ask.textContent='嗯。';
+        msgs.appendChild(ask); msgs.scrollTop=msgs.scrollHeight;
+      }
+      genBusy=false;
+    }, 700);
+
+  } catch(e){
+    think.remove();
+    const err=document.createElement('div'); err.className='msg mochi';
+    err.textContent='网络好像断了，等一下再试试？';
+    msgs.appendChild(err); msgs.scrollTop=msgs.scrollHeight;
+    genBusy=false;
+  }
+}
+
+/* ── 今日情绪签到卡（空状态引导）── 当天还没聊过时显示；点击任一情绪 → 触发聊天引导记录。
+   空壳：以「chatMsgs 是否有对话气泡」近似判断；接入后由"当天是否有真实对话"驱动。
+   ⚠️ 点击后的开场白是占位，接入后由 模型 + 所选情绪 + 记忆 + 性格 实时生成。 */
+let _checkedIn = false; // 今日已有对话，永久隐藏签到卡
+function updateCheckIn(){
+  const card=document.getElementById('checkInCard');
+  if(!card) return;
+  if(_checkedIn){ card.style.display='none'; return; }
+  const hasChat = chatHistory.length > 0 || document.querySelectorAll('#chatMsgs .msg').length > 0;
+  if(hasChat){ _checkedIn=true; card.style.display='none'; }
+  else { card.style.display='block'; }
+}
+async function checkInPick(emo){
+  const card=document.getElementById('checkInCard'); if(card) card.style.display='none';
+  const msgs=document.getElementById('chatMsgs');
+  const emoLabel = EMO_LABEL[emo] || emo;
+  const u=document.createElement('div'); u.className='msg user';
+  u.textContent='今天有点'+emoLabel;
+  msgs.appendChild(u); msgs.scrollTop=msgs.scrollHeight;
+  recordInteraction();
+  // 把签到情绪加入对话历史
+  chatHistory.push({role:'user', content:'今天有点'+emoLabel});
+  if(chatHistory.length>20) chatHistory.splice(0,chatHistory.length-20);
+
+  const apiKey = await loadApiKey();
+  if(!apiKey){
+    const m = makeMochiMsg('');
+    m.textContent='我在的，想跟我说说今天吗？';
+    msgs.appendChild(m); msgs.scrollTop=msgs.scrollHeight;
+    return;
+  }
+
+  // 思考气泡
+  const thinking=document.createElement('div'); thinking.className='msg mochi gen-thinking';
+  thinking.innerHTML='…<span class="gen-dots"><i></i><i></i><i></i></span>';
+  msgs.appendChild(thinking); msgs.scrollTop=msgs.scrollHeight;
+
+  try {
+    const reply = await callAI({
+      system: `你是情绪陪伴宠物 Mochi，一只小水母。用户刚刚签到，说今天有点${emoLabel}。用1句话安静回应，感受这个情绪就好，不卖萌，不给建议，不追问，不用感叹号，不自称Mochi。`,
+      messages: [{role:'user', content:'今天有点'+emoLabel}],
+      maxTokens: 80,
+    });
+    thinking.remove();
+    chatHistory.push({role:'assistant', content:reply});
+    const m = makeMochiMsg('');
+    m.textContent=reply||'我在的。';
+    msgs.appendChild(m); msgs.scrollTop=msgs.scrollHeight;
+    updateJellyEmoFromReply(emoLabel + (reply||''));
+  } catch(_){
+    thinking.remove();
+    const m = makeMochiMsg('');
+    m.textContent='我在的，想跟我说说今天吗？';
+    msgs.appendChild(m); msgs.scrollTop=msgs.scrollHeight;
+  }
+}
+
+// ── 首次渲染：列表（从单一数据源）+ 走势图，并记录列表原始顺序供排序还原 ──
+renderList();
+_listOriginal=[...document.getElementById('listView').children];
+drawChart(weekChartData);
+</script>
+</body>
+</html>

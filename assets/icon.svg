@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="26%" r="62%">
+      <stop offset="0%"   stop-color="#ecf7fb"/>
+      <stop offset="42%"  stop-color="#c0dcea"/>
+      <stop offset="100%" stop-color="#82b4c8"/>
+    </radialGradient>
+
+    <radialGradient id="shine" cx="48%" cy="20%" r="28%">
+      <stop offset="0%"   stop-color="rgba(255,255,255,0.60)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+
+    <linearGradient id="tent" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#9ed4e2" stop-opacity="0.80"/>
+      <stop offset="55%"  stop-color="#9ed4e2" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#9ed4e2" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="aura" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="68"/>
+    </filter>
+
+    <filter id="glow" x="-8%" y="-8%" width="116%" height="116%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <ellipse cx="512" cy="370" rx="380" ry="300"
+    fill="#aad8ea" opacity="0.55" filter="url(#aura)"/>
+
+  <path d="M 334 510 C 318 610, 342 710, 324 840 C 312 930, 328 970, 316 1024"
+    stroke="url(#tent)" stroke-width="11" stroke-linecap="round" fill="none"/>
+  <path d="M 417 506 C 408 614, 428 718, 416 848 C 407 940, 420 980, 410 1024"
+    stroke="url(#tent)" stroke-width="11" stroke-linecap="round" fill="none"/>
+  <path d="M 502 504 C 502 614, 504 720, 503 852 C 502 944, 503 984, 503 1024"
+    stroke="url(#tent)" stroke-width="11" stroke-linecap="round" fill="none"/>
+  <path d="M 586 506 C 596 614, 576 718, 588 848 C 597 940, 584 980, 594 1024"
+    stroke="url(#tent)" stroke-width="11" stroke-linecap="round" fill="none"/>
+  <path d="M 670 510 C 686 610, 662 710, 680 840 C 692 930, 676 970, 688 1024"
+    stroke="url(#tent)" stroke-width="11" stroke-linecap="round" fill="none"/>
+
+  <path d="M 512 120
+    C 647,120 757,236 757,380
+    C 757,468 660,540 541,540
+    L 483,540
+    C 364,540 267,468 267,380
+    C 267,236 377,120 512,120 Z"
+    fill="url(#bg)" filter="url(#glow)"/>
+
+  <path d="M 512 120
+    C 647,120 757,236 757,380
+    C 757,468 660,540 541,540
+    L 483,540
+    C 364,540 267,468 267,380
+    C 267,236 377,120 512,120 Z"
+    fill="url(#shine)"/>
+
+  <ellipse cx="447" cy="305" rx="19" ry="25" fill="#1b2130"/>
+  <ellipse cx="577" cy="305" rx="19" ry="25" fill="#1b2130"/>
+
+  <ellipse cx="441" cy="296" rx="5" ry="7" fill="rgba(255,255,255,0.52)"/>
+  <ellipse cx="571" cy="296" rx="5" ry="7" fill="rgba(255,255,255,0.52)"/>
+
+  <ellipse cx="378" cy="360" rx="26" ry="15" fill="#c8b0c4" opacity="0.34"/>
+  <ellipse cx="646" cy="360" rx="26" ry="15" fill="#c8b0c4" opacity="0.34"/>
+</svg>
