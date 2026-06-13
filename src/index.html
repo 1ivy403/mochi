@@ -1716,7 +1716,11 @@ async function ensureSignedIn(){
 let _sbAccessToken = null;
 
 async function sbFetch(path, opts={}){
-  const token = _sbAccessToken || SB_ANON;
+  if(!_sbAccessToken){
+    console.warn('sbFetch called before sign-in, aborting:', path);
+    return null;
+  }
+  const token = _sbAccessToken;
   const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
     headers:{
       'apikey': SB_ANON,
