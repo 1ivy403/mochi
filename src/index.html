@@ -1874,32 +1874,22 @@ async function maybeSaveLongMemory(userText, mochiReply, apiKey){
 
 // ── 情绪卡写入 Supabase ──
 async function saveEmotionCard(kind, dateKey, emotion, summary, extra={}){
-  const body = withUserId({
+  if(!_sbAccessToken){ console.warn('saveEmotionCard: not signed in'); return; }
+  const payload = withUserId({
     kind, date_key: dateKey, emotion, summary,
     story: extra.story || null,
     range_label: extra.range_label || null,
     period_label: extra.period_label || null,
     updated_at: new Date().toISOString(),
   });
-  const headers = {
-    'apikey': SB_ANON,
-    'Authorization': `Bearer ${SB_ANON}`,
-    'Content-Type': 'application/json',
-    'Prefer': 'return=minimal',
-  };
-  // 先 PATCH（有记录则覆盖），再 INSERT（无记录则新增）
-  const patch = await fetch(
-    `${SB_URL}/rest/v1/emotion_cards?kind=eq.${kind}&date_key=eq.${dateKey}${_sbUserId?'&user_id=eq.'+_sbUserId:''}`,
-    { method:'PATCH', headers, body }
+  // PATCH with return=representation: 有匹配返回数组，无匹配返回空数组
+  const patched = await sbFetch(
+    `emotion_cards?kind=eq.${kind}&date_key=eq.${dateKey}${_sbUserId?'&user_id=eq.'+_sbUserId:''}`,
+    { method:'PATCH', prefer:'return=representation', body: payload }
   );
-  if(patch.status === 200 || patch.status === 204) return; // 更新成功
-  // 没有匹配记录 → INSERT
-  const ins = await fetch(`${SB_URL}/rest/v1/emotion_cards`, {
-    method:'POST', headers, body
-  });
-  if(!ins.ok && ins.status !== 201 && ins.status !== 204){
-    console.warn('saveEmotionCard insert error', ins.status, await ins.text().catch(()=>''));
-  }
+  if(Array.isArray(patched) && patched.length > 0) return; // 覆盖成功
+  // 无匹配记录 → INSERT
+  await sbFetch('emotion_cards', { method:'POST', prefer:'return=minimal', body: payload });
 }
 
 // ── 情绪卡加载（日记面板用）──
