@@ -1677,9 +1677,9 @@ async function ensureSignedIn(){
   try {
     const saved = localStorage.getItem(SB_AUTH_KEY);
     if(saved){
-      const { access_token, user } = JSON.parse(saved);
+      const { access_token, refresh_token, user } = JSON.parse(saved);
       if(user?.id && access_token){
-        // 验证 token 是否还有效
+        // 先验证 access_token 是否还有效
         const check = await fetch(`${SB_URL}/auth/v1/user`, {
           headers:{ 'apikey':SB_ANON, 'Authorization':`Bearer ${access_token}` }
         });
@@ -1688,11 +1688,32 @@ async function ensureSignedIn(){
           _sbAccessToken = access_token;
           return _sbUserId;
         }
+        // access_token 过期 → 用 refresh_token 换新 token，保留同一账号
+        if(refresh_token){
+          const ref = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+            method:'POST',
+            headers:{ 'apikey':SB_ANON, 'Content-Type':'application/json' },
+            body: JSON.stringify({ refresh_token }),
+          });
+          if(ref.ok){
+            const rd = await ref.json();
+            if(rd.access_token && rd.user?.id){
+              _sbUserId = rd.user.id;
+              _sbAccessToken = rd.access_token;
+              localStorage.setItem(SB_AUTH_KEY, JSON.stringify({
+                access_token: rd.access_token,
+                refresh_token: rd.refresh_token || refresh_token,
+                user: rd.user,
+              }));
+              return _sbUserId;
+            }
+          }
+        }
       }
     }
   } catch(_){}
 
-  // 新建匿名登录（Supabase Anonymous Auth 正确端点）
+  // 没有任何已有 session → 新建匿名账号
   try {
     const res = await fetch(`${SB_URL}/auth/v1/signup`, {
       method:'POST',
@@ -1703,7 +1724,11 @@ async function ensureSignedIn(){
     if(data.user?.id){
       _sbUserId = data.user.id;
       _sbAccessToken = data.access_token;
-      localStorage.setItem(SB_AUTH_KEY, JSON.stringify({ access_token: data.access_token, user: data.user }));
+      localStorage.setItem(SB_AUTH_KEY, JSON.stringify({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token || null,
+        user: data.user,
+      }));
       return _sbUserId;
     } else {
       console.warn('anon signup response:', JSON.stringify(data));
