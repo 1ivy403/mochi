@@ -1673,67 +1673,53 @@ const SB_AUTH_KEY = 'mochi_sb_session';
 async function ensureSignedIn(){
   if(_sbUserId) return _sbUserId;
 
-  // 尝试复用已有 session
+  // 获取设备码（Electron 环境从 userData 读取，浏览器预览降级到 localStorage）
+  let deviceId;
+  if(window.electronAPI?.getDeviceId){
+    deviceId = await window.electronAPI.getDeviceId();
+  } else {
+    deviceId = localStorage.getItem('mochi_device_id');
+    if(!deviceId){
+      deviceId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)+Date.now();
+      localStorage.setItem('mochi_device_id', deviceId);
+    }
+  }
+
+  const email    = `${deviceId}@mochi.device`;
+  const password = deviceId;
+
+  // 先尝试登录（设备已注册过）
   try {
-    const saved = localStorage.getItem(SB_AUTH_KEY);
-    if(saved){
-      const { access_token, refresh_token, user } = JSON.parse(saved);
-      if(user?.id && access_token){
-        // 先验证 access_token 是否还有效
-        const check = await fetch(`${SB_URL}/auth/v1/user`, {
-          headers:{ 'apikey':SB_ANON, 'Authorization':`Bearer ${access_token}` }
-        });
-        if(check.ok){
-          _sbUserId = user.id;
-          _sbAccessToken = access_token;
-          return _sbUserId;
-        }
-        // access_token 过期 → 用 refresh_token 换新 token，保留同一账号
-        if(refresh_token){
-          const ref = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
-            method:'POST',
-            headers:{ 'apikey':SB_ANON, 'Content-Type':'application/json' },
-            body: JSON.stringify({ refresh_token }),
-          });
-          if(ref.ok){
-            const rd = await ref.json();
-            if(rd.access_token && rd.user?.id){
-              _sbUserId = rd.user.id;
-              _sbAccessToken = rd.access_token;
-              localStorage.setItem(SB_AUTH_KEY, JSON.stringify({
-                access_token: rd.access_token,
-                refresh_token: rd.refresh_token || refresh_token,
-                user: rd.user,
-              }));
-              return _sbUserId;
-            }
-          }
-        }
+    const res = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'apikey': SB_ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if(res.ok){
+      const data = await res.json();
+      if(data.access_token && data.user?.id){
+        _sbUserId      = data.user.id;
+        _sbAccessToken = data.access_token;
+        return _sbUserId;
       }
     }
   } catch(_){}
 
-  // 没有任何已有 session → 新建匿名账号
+  // 登录失败 → 首次使用，注册新账号
   try {
     const res = await fetch(`${SB_URL}/auth/v1/signup`, {
-      method:'POST',
-      headers:{ 'apikey':SB_ANON, 'Content-Type':'application/json', 'X-Client-Info':'mochi/1.0' },
-      body: JSON.stringify({ is_anonymous: true }),
+      method: 'POST',
+      headers: { 'apikey': SB_ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
-    if(data.user?.id){
-      _sbUserId = data.user.id;
+    if(data.user?.id && data.access_token){
+      _sbUserId      = data.user.id;
       _sbAccessToken = data.access_token;
-      localStorage.setItem(SB_AUTH_KEY, JSON.stringify({
-        access_token: data.access_token,
-        refresh_token: data.refresh_token || null,
-        user: data.user,
-      }));
       return _sbUserId;
-    } else {
-      console.warn('anon signup response:', JSON.stringify(data));
     }
-  } catch(e){ console.warn('anon signin error', e); }
+    console.warn('signup response:', JSON.stringify(data));
+  } catch(e){ console.warn('ensureSignedIn error', e); }
 
   return null;
 }

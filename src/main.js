@@ -1,10 +1,26 @@
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron')
 const path = require('path')
+const fs   = require('fs')
+const crypto = require('crypto')
 
 // 硬件加速：开启 → GPU 负责合成，全屏透明窗口 + 持续动画才不掉帧。
 // 之前为「透明更稳」关掉过，但代价是 CPU 软件渲染整屏 → 严重卡顿。
 // 若开启后水母变黑底（macOS 个别情况），把下面这行取消注释回退到软件渲染：
 // app.disableHardwareAcceleration()
+
+let win  = null
+let tray = null
+
+// ── 设备码：写在 userData 目录，重装 App 不会清除 ──
+function getDeviceId() {
+  const file = path.join(app.getPath('userData'), 'device_id')
+  try {
+    if (fs.existsSync(file)) return fs.readFileSync(file, 'utf8').trim()
+  } catch (_) {}
+  const id = crypto.randomUUID()
+  try { fs.writeFileSync(file, id, 'utf8') } catch (_) {}
+  return id
+}
 
 let win  = null
 let tray = null
@@ -65,6 +81,9 @@ function createTray() {
   ])
   tray.setContextMenu(menu)
 }
+
+// ── IPC：设备码 ──
+ipcMain.handle('get-device-id', () => getDeviceId())
 
 // ── IPC：鼠标穿透控制 ──
 ipcMain.on('mouse-enter-jelly', () => {

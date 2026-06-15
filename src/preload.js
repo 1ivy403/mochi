@@ -16,4 +16,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onCursorPos:     (cb)     => ipcRenderer.on('cursor-pos', (_, x, y) => cb(x, y)),
   // ── 外部链接 ──
   openExternal:    (url)    => shell.openExternal(url),
+  // ── 设备码（持久化到 userData，不受 localStorage 清除影响）──
+  getDeviceId:     ()       => ipcRenderer.invoke('get-device-id'),
 })
