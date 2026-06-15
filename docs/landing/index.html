@@ -432,6 +432,44 @@ footer a:hover { text-decoration:underline; }
 
 /* all bubbles hidden initially via animation */
 .bubble { opacity:0; animation-fill-mode:both; }
+
+/* ── 移动端适配（手机竖屏）── */
+@media (max-width: 680px){
+  .nav{ padding:10px 16px; }
+  .nav-logo{ font-size:14px; }
+  .nav-logo img{ width:24px; height:24px; }
+  .nav-dl{ padding:6px 14px; font-size:12px; }
+
+  /* hero 两列 → 单列居中，文案在上、演示面板在下 */
+  .hero{ grid-template-columns:1fr; min-height:auto; align-items:start; padding:78px 20px 40px; gap:30px; text-align:center; }
+  .hero-eyebrow{ display:inline-block; }
+  .hero-text p{ max-width:100%; margin-left:auto; margin-right:auto; }
+  .hero-btns{ justify-content:center; }
+  .hero-panel{ justify-content:center; }
+
+  /* 各区块横向内边距收窄、纵向压缩 */
+  .demo-section{ padding:52px 16px; }
+  .demo-section > p{ padding:0 4px; }
+  .demo-tabs{ flex-wrap:wrap; }
+  .demo-pane{ gap:20px; margin-bottom:42px; }
+  .demo-desc h3{ font-size:19px; }
+
+  /* 隐私 4 列 → 2 列 */
+  .privacy-strip{ padding:34px 16px; }
+  .privacy-inner{ grid-template-columns:1fr 1fr; gap:20px 18px; max-width:440px; }
+
+  /* 下载卡横排 → 竖排铺满 */
+  .download-wrap{ padding:56px 18px; }
+  .dl-cards{ flex-direction:column; align-items:stretch; }
+  .dl-card{ min-width:0; }
+}
+
+/* 超小屏（窄手机）进一步收敛 */
+@media (max-width: 400px){
+  .hero-text h1{ font-size:26px; }
+  .hero-panel{ transform:scale(.92); transform-origin:top center; }
+  .privacy-inner{ grid-template-columns:1fr; max-width:300px; }
+}
 </style>
 </head>
 <body>
