@@ -1940,7 +1940,28 @@ function getApiConfig(){
   return configs[provider] || configs.quickrouter;
 }
 
-async function callAI({ system, messages, maxTokens = 200, model = null }){
+// ── save_memory tool 定义（AI 自主判断是否调用）──
+const SAVE_MEMORY_TOOL = {
+  name: 'save_memory',
+  description: '把值得长期记住的用户信息存入记忆。适用：反复出现的情绪模式、重要的人或事件、用户的性格偏好。不适用：一次性的闲聊内容。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      type: {
+        type: 'string',
+        enum: ['long_term', 'mid_term'],
+        description: 'long_term：跨周/月都重要的事实或模式。mid_term：近期情绪背景（近几天的状态）。',
+      },
+      content: {
+        type: 'string',
+        description: '要记住的内容，一句话，简洁具体。',
+      },
+    },
+    required: ['type', 'content'],
+  },
+};
+
+async function callAI({ system, messages, maxTokens = 200, model = null, tools = null }){
   const cfg = getApiConfig();
   const provider = localStorage.getItem('mochi_api_provider') || 'quickrouter';
   const defaultModel = provider === 'openai' ? 'deepseek-chat' : 'claude-opus-4-7';
@@ -1949,8 +1970,8 @@ async function callAI({ system, messages, maxTokens = 200, model = null }){
   let body;
   if(cfg.format === 'anthropic'){
     body = { model: useModel, max_tokens: maxTokens, system, messages };
+    if(tools) body.tools = tools;
   } else {
-    // OpenAI 格式：system 放第一条
     const oaiMsgs = [{ role: 'system', content: system }, ...messages];
     body = { model: useModel, max_tokens: maxTokens, messages: oaiMsgs };
   }
@@ -1962,6 +1983,7 @@ async function callAI({ system, messages, maxTokens = 200, model = null }){
   });
   const data = await resp.json();
   if(cfg.format === 'anthropic'){
+    if(tools) return data; // 返回完整响应供调用方处理 tool_use
     return data.content?.[0]?.text || '';
   } else {
     return data.choices?.[0]?.message?.content || '';
@@ -2483,15 +2505,31 @@ async function sendChat(){
     const systemPrompt = await buildSystemPrompt();
     const recentHistory = chatHistory.slice(-10);
 
-    const reply = await callAI({ system: systemPrompt, messages: recentHistory, maxTokens: 200 });
+    const raw = await callAI({ system: systemPrompt, messages: recentHistory, maxTokens: 400, tools: [SAVE_MEMORY_TOOL] });
     thinking.remove();
-    wrap.classList.remove('speaking'); // 回复完成，停止发光
+    wrap.classList.remove('speaking');
+
+    // 提取文字回复
+    const textBlock = (raw.content || []).find(b => b.type === 'text');
+    const reply = textBlock?.text || '';
+
+    // 处理 AI 主动调用 save_memory
+    const toolBlock = (raw.content || []).find(b => b.type === 'tool_use' && b.name === 'save_memory');
+    if(toolBlock){
+      const { type, content } = toolBlock.input || {};
+      if(type === 'long_term' && content){
+        sbFetch('memories_long', { method:'POST', prefer:'return=minimal', body: withUserId({ content }) });
+      } else if(type === 'mid_term' && content){
+        const today = new Date();
+        const dateLabel = `${today.getMonth()+1}月${today.getDate()}日`;
+        sbFetch('memories_mid', { method:'POST', prefer:'return=minimal', body: withUserId({ content, date_label: dateLabel, emotion: 'calm', summary: content }) });
+      }
+    }
 
     chatHistory.push({ role: 'assistant', content: reply });
     const mBub = makeMochiMsg(reply);
     msgs.appendChild(mBub);
     saveMessage('user', text).then(()=> saveMessage('assistant', reply));
-    maybeSaveLongMemory(text, reply, apiKey);
     updateJellyEmoFromReply(reply);
   } catch(e) {
     thinking.remove();
