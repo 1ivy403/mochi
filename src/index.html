@@ -1956,6 +1956,11 @@ const SAVE_MEMORY_TOOL = {
         type: 'string',
         description: '要记住的内容，一句话，简洁具体。',
       },
+      emotion: {
+        type: 'string',
+        enum: ['calm', 'happy', 'anxious', 'low'],
+        description: '仅 mid_term 时填写：这段时间用户的主要情绪基调。',
+      },
     },
     required: ['type', 'content'],
   },
@@ -1986,6 +1991,7 @@ async function callAI({ system, messages, maxTokens = 200, model = null, tools =
     if(tools) return data; // 返回完整响应供调用方处理 tool_use
     return data.content?.[0]?.text || '';
   } else {
+    // OpenAI 格式不支持 tool use，直接返回文本
     return data.choices?.[0]?.message?.content || '';
   }
 }
@@ -2441,7 +2447,15 @@ async function buildSystemPrompt(){
 - 绝对禁止替用户解读情绪：不说"听起来你是…""心里其实是…""其实你在…""这句话背后是…"——用户说什么就是什么，不要帮他分析自己
 - 用户说简短的字词（如"1""嗯""哦""好"），就简单回应，不要脑补深意
 
-直接用中文回复，不解释自己在做什么。`;
+直接用中文回复，不解释自己在做什么。
+
+【记忆工具】
+你有一个 save_memory 工具。在回复之前，如果对话中出现了值得记住的内容，先调用它：
+- long_term：用户反复提到的情绪模式、重要的人或事、性格特征、偏好——这些跨周/月都有意义
+- mid_term：用户近几天的整体状态或正在经历的事——短期背景
+- 一次性的日常闲聊不要调用
+- 每次最多调用一次，内容一句话，具体
+- 不确定是否值得记时，不调用`;
 
   // ① 性格养成部分（动态叠加，随积累自然出现）
   if(Object.keys(personality).length > 0){
@@ -2509,20 +2523,22 @@ async function sendChat(){
     thinking.remove();
     wrap.classList.remove('speaking');
 
-    // 提取文字回复
-    const textBlock = (raw.content || []).find(b => b.type === 'text');
-    const reply = textBlock?.text || '';
+    // 兼容 Anthropic（返回完整 data 对象）和 OpenAI（返回字符串）
+    const isRawObj = raw && typeof raw === 'object';
+    const textBlock = isRawObj ? (raw.content || []).find(b => b.type === 'text') : null;
+    const reply = isRawObj ? (textBlock?.text || '') : (raw || '');
 
-    // 处理 AI 主动调用 save_memory
-    const toolBlock = (raw.content || []).find(b => b.type === 'tool_use' && b.name === 'save_memory');
+    // 处理 AI 主动调用 save_memory（仅 Anthropic 格式支持）
+    const toolBlock = isRawObj ? (raw.content || []).find(b => b.type === 'tool_use' && b.name === 'save_memory') : null;
     if(toolBlock){
-      const { type, content } = toolBlock.input || {};
+      const { type, content, emotion: emoTag } = toolBlock.input || {};
       if(type === 'long_term' && content){
         sbFetch('memories_long', { method:'POST', prefer:'return=minimal', body: withUserId({ content }) });
       } else if(type === 'mid_term' && content){
         const today = new Date();
         const dateLabel = `${today.getMonth()+1}月${today.getDate()}日`;
-        sbFetch('memories_mid', { method:'POST', prefer:'return=minimal', body: withUserId({ content, date_label: dateLabel, emotion: 'calm', summary: content }) });
+        const validEmo = ['calm','happy','anxious','low'].includes(emoTag) ? emoTag : 'calm';
+        sbFetch('memories_mid', { method:'POST', prefer:'return=minimal', body: withUserId({ content, date_label: dateLabel, emotion: validEmo, summary: content }) });
       }
     }
 
