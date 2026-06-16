@@ -1950,7 +1950,10 @@ async function loadExtendedMemory(){
   ]).catch(()=>[[], []]);
   const long = (longRows||[]).map(r=>r.content).join('\n');
   const mid  = (midRows||[]).map(r=>`${r.date_label} ${r.emotion}：${r.summary}`).reverse().join('\n');
-  return [long, mid].filter(Boolean).join('\n');
+  const parts = [];
+  if(long) parts.push(`【长期记忆】\n${long}`);
+  if(mid)  parts.push(`【中期情绪记录（扩展20条）】\n${mid}`);
+  return parts.join('\n\n');
 }
 
 const SAVE_MEMORY_TOOL = {
@@ -2534,7 +2537,9 @@ async function sendChat(){
     // 信号词检测：出现时追加扩展历史记忆作为安全网
     if(SIGNAL_WORDS.some(w => text.includes(w))){
       const extra = await loadExtendedMemory();
-      if(extra) systemPrompt += `\n\n【用户消息含回溯信号，以下是更完整的历史记忆，按需引用】\n${extra}`;
+      if(extra && !systemPrompt.includes('【用户消息含回溯信号')){
+        systemPrompt += `\n\n【用户消息含回溯信号，以下是更完整的历史记忆，按需引用】\n${extra}`;
+      }
     }
 
     const raw = await callAI({ system: systemPrompt, messages: recentHistory, maxTokens: 400, tools: [SAVE_MEMORY_TOOL] });
