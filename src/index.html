@@ -2610,12 +2610,11 @@ async function sendChat(){
       }
     }
 
-    // 反馈检测：负反馈 → 重置性格；正反馈 → 巩固记录
-    if(NEGATIVE_FEEDBACK.some(w => text.includes(w))){
-      calibratePersonality();
-    } else if(POSITIVE_FEEDBACK.some(w => text.includes(w))){
-      consolidatePersonality(text);
-    }
+    // 反馈检测：正向优先（避免子串误判），负反馈 → 重置性格；正反馈 → 巩固记录
+    const isPositiveFeedback = POSITIVE_FEEDBACK.some(w => text.includes(w));
+    const isNegativeFeedback = !isPositiveFeedback && NEGATIVE_FEEDBACK.some(w => text.includes(w));
+    if(isNegativeFeedback){ calibratePersonality(); }
+    else if(isPositiveFeedback){ consolidatePersonality(text); }
 
     chatHistory.push({ role: 'assistant', content: reply });
     const mBub = makeMochiMsg(reply);
