@@ -2110,9 +2110,35 @@ Mochi 的性格维度：reply_style / initiative / sensitivity / nickname
 }
 
 // 负反馈校准：重置性格，让 Mochi 重新自然养成
-async function calibratePersonality(){
-  if(!_sbUserId) return;
-  await sbFetch(`personality?user_id=eq.${_sbUserId}`, { method:'DELETE', prefer:'return=minimal' });
+// 负反馈软回滚：不清零，写入负反馈信号 + 降低所有 trait confidence
+async function calibratePersonality(userText){
+  if(!_sbAccessToken) return;
+  const today = new Date();
+  const dateLabel = `${today.getMonth()+1}月${today.getDate()}日`;
+
+  // 写入负反馈信号，下次批量进化时 AI 会看到
+  sbFetch('memories_mid', {
+    method:'POST', prefer:'return=minimal',
+    body: withUserId({
+      content: `用户负向反馈：${userText}`,
+      date_label: dateLabel,
+      emotion: 'anxious',
+      summary: '用户觉得 Mochi 当前风格有些不对，希望调整',
+    }),
+  });
+
+  // 降低现有 trait 的 confidence（减半），让 Mochi 变得不那么确定
+  const uid = _sbUserId;
+  const f = uid ? `user_id=eq.${uid}&` : '';
+  const rows = await sbFetch(`personality?${f}select=trait_key,confidence`) || [];
+  for(const row of rows){
+    const newConf = Math.max(1, Math.floor((row.confidence || 2) / 2));
+    sbFetch(`personality?${f}trait_key=eq.${encodeURIComponent(row.trait_key)}`, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: withUserId({ confidence: newConf, updated_at: new Date().toISOString() }),
+    });
+  }
 }
 
 // 正反馈巩固：写入一条正反馈信号，下次进化时 AI 会看到
@@ -2613,7 +2639,7 @@ async function sendChat(){
     // 反馈检测：正向优先（避免子串误判），负反馈 → 重置性格；正反馈 → 巩固记录
     const isPositiveFeedback = POSITIVE_FEEDBACK.some(w => text.includes(w));
     const isNegativeFeedback = !isPositiveFeedback && NEGATIVE_FEEDBACK.some(w => text.includes(w));
-    if(isNegativeFeedback){ calibratePersonality(); }
+    if(isNegativeFeedback){ calibratePersonality(text); }
     else if(isPositiveFeedback){ consolidatePersonality(text); }
 
     chatHistory.push({ role: 'assistant', content: reply });
