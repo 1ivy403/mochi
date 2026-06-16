@@ -767,20 +767,16 @@ async function initFromSupabase(){
     // 静默登录（加载动画已显示，用户无感知）
     await ensureSignedIn();
 
-    const [todayMsgs, cards] = await Promise.all([
-      loadTodayMessages(),
+    const [recentMsgs, cards] = await Promise.all([
+      loadRecentMessages(),
       loadEmotionCards(),
     ]);
 
     document.getElementById('_sb_loading')?.remove();
     document.getElementById('_sb_list_loading')?.remove();
 
-    renderMsgsFromData(todayMsgs);
+    renderMsgsFromData(recentMsgs);
     renderCardsFromData(cards);
-
-    if(todayMsgs.length === 0){
-      loadApiKey().then(k => { if(k) compressYesterdayMessages(k); });
-    }
   } catch(e){
     document.getElementById('_sb_loading')?.remove();
     document.getElementById('_sb_list_loading')?.remove();
@@ -1797,11 +1793,12 @@ async function saveMessage(role, content){
     body: withUserId({role, content, seq: _msgSeq++}),
   });
 }
-async function loadTodayMessages(){
-  const today = new Date().toISOString().slice(0,10);
+async function loadRecentMessages(){
   const uid = _sbUserId;
   const filter = uid ? `user_id=eq.${uid}&` : '';
-  return await sbFetch(`messages?${filter}created_at=gte.${today}T00:00:00Z&order=id.asc`) || [];
+  // 取最近 20 条（展示用），倒序取再翻转保证时间正序
+  const rows = await sbFetch(`messages?${filter}order=id.desc&limit=20`) || [];
+  return rows.reverse();
 }
 // 加载昨日对话并压缩进记忆（次日首次打开时调用）
 async function compressYesterdayMessages(apiKey){
