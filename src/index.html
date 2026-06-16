@@ -2087,6 +2087,49 @@ Mochi 的性格维度：
   } catch(_){}
 }
 
+// 深度维度：单次对话触发，AI 判断是否值得立即进化
+async function evolvePersonalityFromTurn(userText, mochiReply, apiKey){
+  if(!apiKey) return;
+  const currentPersonality = await loadPersonality();
+  const personalityDesc = Object.entries(currentPersonality).map(([k,v])=>`${k}: ${v}`).join('\n') || '（尚无积累）';
+  try {
+    const result = await callAI({
+      system: `你是 Mochi 的性格演化分析器。这次对话有明显的情感深度（用户刚产生了一条值得长期记忆的内容）。判断这次对话是否需要立即微调 Mochi 的陪伴风格。
+
+Mochi 的性格维度：reply_style / initiative / sensitivity / nickname
+规则：变化要极克制，只在有非常明确的单次信号时才改。若不需要改变，输出：{}
+输出 JSON，只列需要改变的维度：{"trait_key":"新描述"}`,
+      messages: [{ role: 'user', content: `当前性格：\n${personalityDesc}\n\n本次对话：\n用户：${userText}\nMochi：${mochiReply}` }],
+      maxTokens: 150,
+    });
+    const changes = JSON.parse(result.trim());
+    for(const [key, value] of Object.entries(changes)){
+      await savePersonalityTrait(key, value);
+    }
+  } catch(_){}
+}
+
+// 负反馈校准：重置性格，让 Mochi 重新自然养成
+async function calibratePersonality(){
+  if(!_sbUserId) return;
+  await sbFetch(`personality?user_id=eq.${_sbUserId}`, { method:'DELETE', prefer:'return=minimal' });
+}
+
+// 正反馈巩固：写入一条正反馈信号，下次进化时 AI 会看到
+async function consolidatePersonality(userText){
+  if(!_sbAccessToken) return;
+  const today = new Date();
+  const dateLabel = `${today.getMonth()+1}月${today.getDate()}日`;
+  sbFetch('memories_mid', {
+    method:'POST', prefer:'return=minimal',
+    body: withUserId({ content: `用户正向反馈：${userText}`, date_label: dateLabel, emotion: 'happy', summary: `用户对 Mochi 当前风格表示认可` }),
+  });
+}
+
+// 反馈关键词检测
+const NEGATIVE_FEEDBACK = ['怪怪的','不喜欢你这样','换种方式','不要这样说话','你变了','说话方式不对','不舒服'];
+const POSITIVE_FEEDBACK = ['好可爱','喜欢你这样','这样说话很好','你最近好多了','好温柔','你变了好多','喜欢你'];
+
 /* ══════════════════════════════════════════════
    周/月叙事生成
    按 narrative.md 规范：还原细节，不下结论
@@ -2557,12 +2600,21 @@ async function sendChat(){
       const { type, content, emotion: emoTag } = toolBlock.input || {};
       if(type === 'long_term' && content){
         sbFetch('memories_long', { method:'POST', prefer:'return=minimal', body: withUserId({ content }) });
+        // 深度维度：长期记忆写入 = 深度信号，后台触发性格进化
+        loadApiKey().then(k => { if(k) evolvePersonalityFromTurn(text, reply, k); });
       } else if(type === 'mid_term' && content){
         const today = new Date();
         const dateLabel = `${today.getMonth()+1}月${today.getDate()}日`;
         const validEmo = ['calm','happy','anxious','low'].includes(emoTag) ? emoTag : 'calm';
         sbFetch('memories_mid', { method:'POST', prefer:'return=minimal', body: withUserId({ content, date_label: dateLabel, emotion: validEmo, summary: content }) });
       }
+    }
+
+    // 反馈检测：负反馈 → 重置性格；正反馈 → 巩固记录
+    if(NEGATIVE_FEEDBACK.some(w => text.includes(w))){
+      calibratePersonality();
+    } else if(POSITIVE_FEEDBACK.some(w => text.includes(w))){
+      consolidatePersonality(text);
     }
 
     chatHistory.push({ role: 'assistant', content: reply });
