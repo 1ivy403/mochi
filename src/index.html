@@ -1938,6 +1938,30 @@ function getApiConfig(){
 }
 
 // ── save_memory tool 定义（AI 自主判断是否调用）──
+// ── 当下状态：基于今日情绪卡，存 localStorage，每日更新 ──
+const CURRENT_STATE_KEY = 'mochi_current_state';
+
+function saveCurrentState(emotion, summary){
+  const EMO_DESC = { calm:'平静', happy:'开心', anxious:'焦虑', low:'低落' };
+  const state = {
+    emotion,
+    emotion_label: EMO_DESC[emotion] || emotion,
+    summary,
+    date: new Date().toISOString().slice(0,10),
+  };
+  localStorage.setItem(CURRENT_STATE_KEY, JSON.stringify(state));
+}
+
+function loadCurrentState(){
+  try {
+    const s = JSON.parse(localStorage.getItem(CURRENT_STATE_KEY) || 'null');
+    if(!s) return null;
+    // 超过2天自动过期
+    const daysDiff = (Date.now() - new Date(s.date).getTime()) / 86400000;
+    return daysDiff <= 2 ? s : null;
+  } catch(_){ return null; }
+}
+
 const SIGNAL_WORDS = ['又','还是','终于','一直','从来','以前'];
 
 // 信号词触发时拉取更多历史记忆（mid 扩展到20条）
@@ -2560,6 +2584,12 @@ async function buildSystemPrompt(){
   // ③ 中期情绪摘要
   if(mem.mid) layers.push(`【用户最近的情绪记录】\n${mem.mid}`);
 
+  // ④ 当下状态（今日情绪卡生成后自动更新，2天内有效）
+  const currentState = loadCurrentState();
+  if(currentState){
+    layers.push(`【用户今天的状态】\n${currentState.date} · ${currentState.emotion_label}\n${currentState.summary}\n（这是用户今天整理出的情绪，陪伴时自然参照，不需要刻意提及）`);
+  }
+
   return layers.join('\n\n');
 }
 
@@ -2770,6 +2800,7 @@ async function genCardScript(){
     // ── 写入 Supabase + 立即刷新日记面板（走势图/列表/日历全部同步）──
     await saveEmotionCard('day', todayKey, emoKeyEn, summary);
     saveSessionMemory(emotion, summary);
+    saveCurrentState(emoKeyEn, summary);  // 更新当下状态
     refreshDiaryFromSupabase();
 
     // Mochi 冒泡，语气安静，不追问
