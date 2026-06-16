@@ -1938,6 +1938,21 @@ function getApiConfig(){
 }
 
 // ── save_memory tool 定义（AI 自主判断是否调用）──
+const SIGNAL_WORDS = ['又','还是','终于','一直','从来','以前'];
+
+// 信号词触发时拉取更多历史记忆（mid 扩展到20条）
+async function loadExtendedMemory(){
+  const uid = _sbUserId;
+  const f = uid ? `user_id=eq.${uid}&` : '';
+  const [longRows, midRows] = await Promise.all([
+    sbFetch(`memories_long?${f}select=content&order=created_at.asc`),
+    sbFetch(`memories_mid?${f}select=date_label,emotion,summary&order=created_at.desc&limit=20`),
+  ]).catch(()=>[[], []]);
+  const long = (longRows||[]).map(r=>r.content).join('\n');
+  const mid  = (midRows||[]).map(r=>`${r.date_label} ${r.emotion}：${r.summary}`).reverse().join('\n');
+  return [long, mid].filter(Boolean).join('\n');
+}
+
 const SAVE_MEMORY_TOOL = {
   name: 'save_memory',
   description: '把值得长期记住的用户信息存入记忆。适用：反复出现的情绪模式、重要的人或事件、用户的性格偏好。不适用：一次性的闲聊内容。',
@@ -2513,8 +2528,14 @@ async function sendChat(){
   setJellySpeaking(60000); // 发光，等回复回来后手动停
 
   try {
-    const systemPrompt = await buildSystemPrompt();
+    let systemPrompt = await buildSystemPrompt();
     const recentHistory = chatHistory.slice(-10);
+
+    // 信号词检测：出现时追加扩展历史记忆作为安全网
+    if(SIGNAL_WORDS.some(w => text.includes(w))){
+      const extra = await loadExtendedMemory();
+      if(extra) systemPrompt += `\n\n【用户消息含回溯信号，以下是更完整的历史记忆，按需引用】\n${extra}`;
+    }
 
     const raw = await callAI({ system: systemPrompt, messages: recentHistory, maxTokens: 400, tools: [SAVE_MEMORY_TOOL] });
     thinking.remove();
